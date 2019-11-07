@@ -2,12 +2,19 @@ use nom::{
   IResult,
   bytes::complete::{escaped_transform, take, tag, take_while_m_n, take_while, take_while1},
   character::complete::{crlf, not_line_ending, none_of, one_of, space1, space0, digit1},
-  combinator::{verify, recognize, map_res, map, iterator, value, opt},
+  combinator::{all_consuming, verify, recognize, map_res, map, iterator, value, opt},
   sequence::{tuple, pair, delimited, preceded, terminated},
   branch::{alt},
-  error::ErrorKind,
+  error::{ParseError, ErrorKind},
   multi::{separated_nonempty_list, many0, many1, fold_many0, separated_list, many_till},
 };
+
+fn w<'a, O, P>(p: P) -> impl Fn(&'a str) -> IResult<&'a str, O>
+where 
+      P: Fn(&'a str) -> IResult<&'a str, O>
+{
+    preceded(many0(white_space), p)
+}
 
 fn is_idalpha(c: char) -> bool {
     c.is_alphabetic() || c == '_'
@@ -18,7 +25,7 @@ fn is_idalphanum(c: char) -> bool {
 }
 
 fn identifier(input: &str) -> IResult<&str, &str> {
-    recognize(pair(take_while1(is_idalpha), take_while(is_idalphanum)))(input)
+    w(recognize(pair(take_while1(is_idalpha), take_while(is_idalphanum))))(input)
 }
 
 fn hash_comment(input: &str) -> IResult<&str, ()> {
@@ -50,7 +57,7 @@ fn multiline_dotstart(input: &str) -> IResult<&str, &str> {
 }
 
 fn multi_line(input: &str) -> IResult<&str, Vec<&str>> {
-    delimited(tuple((tag("text:"), space0, alt((hash_comment, value((), crlf))))),
+    delimited(tuple((w(tag("text:")), space0, alt((hash_comment, value((), crlf))))),
         many0(alt((multiline_literal, multiline_dotstart))),
         tag(".\r\n"))(input)
 }
@@ -90,10 +97,10 @@ fn parse_quantifier() {
 }
 
 fn number(input: &str) -> IResult<&str, u64> {
-    map_res(pair(digit1, quantifier),
+    w(map_res(pair(digit1, quantifier),
         |(n, q)| n.parse::<u64>().map_err(|_| (input, ErrorKind::TooLarge)).and_then(
             |n| n.checked_mul(q.weight()).ok_or((input, ErrorKind::TooLarge))
-        ))(input)
+        )))(input)
 }
 #[test]
 fn parse_number() {
@@ -103,17 +110,21 @@ fn parse_number() {
         
 // Called "tag" in RFC5228
 fn tagged_id(input: &str) -> IResult<&str, &str> {
-    preceded(tag(":"), identifier)(input)
+    preceded(w(tag(":")), identifier)(input)
 }
 
 fn white_space(input: &str) -> IResult<&str, ()> {
-    alt((comment, value((), many1(alt((crlf, space1))))))(input)
+    alt((
+        value((), comment),
+        value((), crlf),
+        value((), space1)))(input)
+//    alt((comment, value((), many1(alt((crlf, space1))))))(input)
 }
 
 fn quoted_string(input: &str) -> IResult<&str, String> {
     let one: usize = 1;
     delimited(
-        tag("\""),
+        w(tag("\"")),
         escaped_transform(
             none_of(r#"\""#),
             '\\',
@@ -124,28 +135,31 @@ fn quoted_string(input: &str) -> IResult<&str, String> {
 // PARSING BEGINS HERE
 
 pub fn document(input: &str) -> IResult<&str, Document> {
-    map(many0(command),
-        |commands| Document { commands })
-        (input)
+    delimited(many0(white_space),
+    all_consuming(
+        map(many0(command),
+            |commands| Document { commands })),
+    many0(white_space))
+    (input)
 }
 
 fn command(input: &str) -> IResult<&str, Command> {
     map(tuple((
             identifier,
             argument_group,
-            alt((value(vec![], tag(";")), 
-                 delimited(tag("{"), many0(command), tag("}"))))
+            alt((value(vec![], w(tag(";"))), 
+                 delimited(w(tag("{")), many0(command), w(tag("}")))))
             )),
         |(id, args, block)| Command { id, args, block })(input)
 }
 
 fn test_list(input: &str) -> IResult<&str, Vec<Test>> {
-    alt((
+    map(opt(alt((
         map(test, |t| vec![t]),
         delimited(
-            tag("("),
-            separated_nonempty_list(tag(","), test),
-            tag(")"))))
+            w(tag("(")),
+            separated_nonempty_list(w(tag(",")), test),
+            w(tag(")")))))), |o| o.unwrap_or(vec![]))
     (input)
 }
 
@@ -158,9 +172,9 @@ fn string_list(input: &str) -> IResult<&str, Vec<StringIsh>> {
     alt((
         map(stringish, |s| vec![s]),
         delimited(
-            tag("["),
-            separated_nonempty_list(tag(","), stringish),
-            tag("]"))))
+            w(tag("[")),
+            separated_nonempty_list(w(tag(",")), stringish),
+            w(tag("]")))))
     (input)
 }
 
@@ -184,38 +198,38 @@ fn test(input: &str) -> IResult<&str, Test> {
     (input)
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct Document<'doc> {
     commands: Vec<Command<'doc>>
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct Command<'doc> {
     id: &'doc str,
     args: ArgumentGroup<'doc>,
     block: Vec<Command<'doc>>,
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct ArgumentGroup<'doc> {
     inner: Vec<Argument<'doc>>,
     tests: Vec<Test<'doc>>,
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub enum Argument<'doc> {
     Strings(Vec<StringIsh<'doc>>),
     Number(u64),
     Tag(&'doc str),
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub enum StringIsh<'doc> {
     Quoted(String),
     MultiLine(Vec<&'doc str>),
 }
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct Test<'doc> {
     id: &'doc str,
     args: ArgumentGroup<'doc>,

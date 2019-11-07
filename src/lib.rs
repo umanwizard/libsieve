@@ -6,4 +6,4 @@ mod tests {
     }
 }
 
-mod parse;
+pub mod parse;
