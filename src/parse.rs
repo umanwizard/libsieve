@@ -165,11 +165,11 @@ fn quoted_string(input: &str) -> IResult<&str, String> {
 // PARSING BEGINS HERE
 
 pub fn document(input: &str) -> IResult<&str, Document> {
-    delimited(
+    all_consuming(delimited(
         many0(white_space),
-        all_consuming(map(many0(command), |commands| Document { commands })),
+        map(many0(command), |commands| Document { commands }),
         many0(white_space),
-    )(input)
+    ))(input)
 }
 
 fn command(input: &str) -> IResult<&str, Command> {
