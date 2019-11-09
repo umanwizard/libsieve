@@ -241,20 +241,20 @@ fn test(input: &str) -> IResult<&str, Test> {
 
 #[derive(Debug, Clone)]
 pub struct Document<'doc> {
-    commands: Vec<Command<'doc>>,
+    pub commands: Vec<Command<'doc>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Command<'doc> {
-    id: &'doc str,
-    args: ArgumentGroup<'doc>,
-    block: Vec<Command<'doc>>,
+    pub id: &'doc str,
+    pub args: ArgumentGroup<'doc>,
+    pub block: Vec<Command<'doc>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ArgumentGroup<'doc> {
-    inner: Vec<Argument<'doc>>,
-    tests: Vec<Test<'doc>>,
+    pub inner: Vec<Argument<'doc>>,
+    pub tests: Vec<Test<'doc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -264,7 +264,7 @@ pub enum Argument<'doc> {
     Tag(&'doc str),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StringIsh<'doc> {
     Quoted(String),
     MultiLine(Vec<&'doc str>),
@@ -272,8 +272,8 @@ pub enum StringIsh<'doc> {
 
 #[derive(Debug, Clone)]
 pub struct Test<'doc> {
-    id: &'doc str,
-    args: ArgumentGroup<'doc>,
+    pub id: &'doc str,
+    pub args: ArgumentGroup<'doc>,
 }
 
 #[test]

@@ -7,3 +7,4 @@ mod tests {
 }
 
 pub mod parse;
+pub mod sema;
