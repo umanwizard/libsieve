@@ -152,7 +152,7 @@ pub fn if_control<'doc>(cmds: &'doc [Command]) -> Result<IfControl<'doc>> {
             assert_eq!("if", cmd.id);
             branches.push(if_branch(cmd)?);
         } else {
-            match cmd.id {
+            match cmd.id.to_lowercase().as_str() {
                 "elsif" => branches.push(if_branch(cmd)?),
                 "else" => {
                     if i != cmds.len() - 1 {
@@ -181,7 +181,7 @@ pub fn if_branch<'doc>(cmd: &'doc Command) -> Result<(TestCommand<'doc>, Block<'
 }
 
 pub fn e_branch<'doc>(cmd: &'doc Command) -> Result<Block<'doc>> {
-    assert_eq!("else", cmd.id);
+    assert_eq!("else", cmd.id.to_lowercase().as_str());
     if cmd.args.inner.len() > 0 || cmd.args.tests.len() > 0 {
         Err("else cannot have any arguments.".to_owned())
     } else {
@@ -190,7 +190,7 @@ pub fn e_branch<'doc>(cmd: &'doc Command) -> Result<Block<'doc>> {
 }
 
 pub fn test_command<'doc>(cmd: &'doc Test) -> Result<TestCommand<'doc>> {
-    let result = match cmd.id {
+    let result = match cmd.id.to_lowercase().as_str() {
         "address" => address(&cmd),
         "allof" => allof(&cmd),
         "anyof" => anyof(&cmd),
@@ -238,7 +238,7 @@ fn analyze_args<'doc>(args: &'doc [Argument]) -> Result<Args<'doc>> {
                 if ret.positional.len() > 0 {
                     return Err(format!("Tag {} after positional argument", s));
                 }
-                match s.as_ref() {
+                match s.to_lowercase().as_ref() {
                     "comparator" => {
                         if let Some(Argument::Strings(ss)) = it.next() {
                             if ss.len() != 1 {
@@ -248,7 +248,7 @@ fn analyze_args<'doc>(args: &'doc [Argument]) -> Result<Args<'doc>> {
                                 ));
                             }
                             if let StringIsh::Quoted(s) = &ss[0] {
-                                match s.as_ref() {
+                                match s.to_lowercase().as_ref() {
                                     "i;octet" => ArgKind::Comparator(Comparator::Octet),
                                     "i;ascii-casemap" => {
                                         ArgKind::Comparator(Comparator::AsciiCasemap)
@@ -487,7 +487,7 @@ pub fn non_if_command<'doc>(cmd: &'doc Command) -> Result<TopLevelCommand<'doc>>
     if args != Default::default() {
         return Err(format!("{} does not take tagged arguments.", cmd.id));
     }
-    match cmd.id {
+    match cmd.id.to_lowercase().as_str() {
         "require" => {
             if pos.len() != 1 {
                 Err(format!("Require takes one positional arg."))
