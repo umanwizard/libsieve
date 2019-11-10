@@ -387,7 +387,7 @@ pub fn exists<'doc>(cmd: &'doc Test) -> Result<TestCommand<'doc>> {
     }
     if let NonTaggedArg::Strings(hn) = args.positional[0] {
         return Ok(TestCommand::Exists(ExistsTest {
-            header_names: hn.to_owned()
+            header_names: hn.to_owned(),
         }));
     }
     return Err(format!(
@@ -431,11 +431,11 @@ pub fn not<'doc>(cmd: &'doc Test) -> Result<TestCommand<'doc>> {
     }
     let args: Args<'doc> = analyze_args(&cmd.args.inner)?;
     if args != Default::default() {
-        return Err(format!(
-            "Not takes no positional or tagged arguments."
-        ));
+        return Err(format!("Not takes no positional or tagged arguments."));
     }
-    Ok(TestCommand::Not(Box::new(test_command(&cmd.args.tests[0])?)))
+    Ok(TestCommand::Not(Box::new(test_command(
+        &cmd.args.tests[0],
+    )?)))
 }
 
 pub fn size<'doc>(cmd: &'doc Test) -> Result<TestCommand<'doc>> {
@@ -491,9 +491,10 @@ pub fn non_if_command<'doc>(cmd: &'doc Command) -> Result<TopLevelCommand<'doc>>
         "require" => {
             if pos.len() != 1 {
                 Err(format!("Require takes one positional arg."))
-            }
-            else if let NonTaggedArg::Strings(ss) = pos[0] {
-                Ok(TopLevelCommand::Require(RequireControl { capabilities: ss.to_owned() }))
+            } else if let NonTaggedArg::Strings(ss) = pos[0] {
+                Ok(TopLevelCommand::Require(RequireControl {
+                    capabilities: ss.to_owned(),
+                }))
             } else {
                 Err(format!("Require arg must be a string or string list."))
             }
@@ -504,26 +505,25 @@ pub fn non_if_command<'doc>(cmd: &'doc Command) -> Result<TopLevelCommand<'doc>>
             } else {
                 Ok(TopLevelCommand::Stop)
             }
-        },
+        }
         "keep" => {
             if !pos.is_empty() {
                 Err(format!("keep takes no arguments."))
             } else {
                 Ok(TopLevelCommand::Keep)
             }
-        },
+        }
         "discard" => {
             if !pos.is_empty() {
                 Err(format!("discard takes no arguments."))
             } else {
                 Ok(TopLevelCommand::Discard)
             }
-        },
+        }
         "fileinto" => {
             if pos.len() != 1 {
                 Err(format!("Fileinto takes one positional arg."))
-            }
-            else if let NonTaggedArg::Strings(mb) = pos[0] {
+            } else if let NonTaggedArg::Strings(mb) = pos[0] {
                 if (mb.len() == 1) {
                     Ok(TopLevelCommand::Fileinto(mb[0].clone()))
                 } else {
@@ -532,12 +532,11 @@ pub fn non_if_command<'doc>(cmd: &'doc Command) -> Result<TopLevelCommand<'doc>>
             } else {
                 Err(format!("Fileinto arg must be a string."))
             }
-        },
+        }
         "redirect" => {
             if pos.len() != 1 {
                 Err(format!("Redirect takes one positional arg."))
-            }
-            else if let NonTaggedArg::Strings(addr) = pos[0] {
+            } else if let NonTaggedArg::Strings(addr) = pos[0] {
                 if (addr.len() == 1) {
                     Ok(TopLevelCommand::Redirect(addr[0].clone()))
                 } else {
@@ -546,7 +545,7 @@ pub fn non_if_command<'doc>(cmd: &'doc Command) -> Result<TopLevelCommand<'doc>>
             } else {
                 Err(format!("Redirect arg must be a string."))
             }
-        },
+        }
         _ => Err(format!("Unrecognized command.")),
     }
 }
