@@ -9,9 +9,11 @@ use std::str::FromStr;
 
 type Result<Node> = std::result::Result<Node, String>;
 
+#[derive(Debug)]
 pub struct Ast<'ast> {
     commands: Vec<TopLevelCommand<'ast>>,
 }
+#[derive(Debug)]
 pub enum TopLevelCommand<'ast> {
     If(IfControl<'ast>),
     Require(RequireControl<'ast>),
@@ -21,15 +23,19 @@ pub enum TopLevelCommand<'ast> {
     Keep,
     Discard,
 }
+#[derive(Debug)]
 pub struct IfControl<'ast> {
     branches: Vec<(TestCommand<'ast>, Block<'ast>)>,
     else_branch: Option<Block<'ast>>,
 }
+#[derive(Debug)]
 pub struct Block<'ast>(Vec<TopLevelCommand<'ast>>);
 
+#[derive(Debug)]
 pub struct RequireControl<'ast> {
     capabilities: Vec<StringIsh<'ast>>,
 }
+#[derive(Debug)]
 pub enum TestCommand<'ast> {
     Address(AddressTest<'ast>),
     Allof(Vec<TestCommand<'ast>>),
@@ -42,6 +48,7 @@ pub enum TestCommand<'ast> {
     Size(SizeTest),
     True,
 }
+#[derive(Debug)]
 pub struct AddressTest<'ast> {
     comparator: Comparator,
     address_part: AddressPart,
@@ -49,6 +56,7 @@ pub struct AddressTest<'ast> {
     header_list: Vec<StringIsh<'ast>>,
     key_list: Vec<StringIsh<'ast>>,
 }
+#[derive(Debug)]
 pub struct EnvelopeTest<'ast> {
     comparator: Comparator,
     address_part: AddressPart,
@@ -56,15 +64,18 @@ pub struct EnvelopeTest<'ast> {
     envelope_part: Vec<StringIsh<'ast>>,
     key_list: Vec<StringIsh<'ast>>,
 }
+#[derive(Debug)]
 pub struct ExistsTest<'ast> {
     header_names: Vec<StringIsh<'ast>>,
 }
+#[derive(Debug)]
 pub struct HeaderTest<'ast> {
     comparator: Comparator,
     match_type: MatchType,
     header_names: Vec<StringIsh<'ast>>,
     key_list: Vec<StringIsh<'ast>>,
 }
+#[derive(Debug)]
 pub struct SizeTest {
     over: bool,
     limit: u64,
@@ -110,11 +121,19 @@ pub fn analyze<'doc>(doc: &'doc Document) -> Result<Ast<'doc>> {
 
 pub fn commands<'doc>(cmds: &'doc [Command]) -> Result<Vec<TopLevelCommand<'doc>>> {
     let mut ret = Vec::new();
-    for mut i in 0..cmds.len() {
+    let mut to_skip = 0;
+    for i in 0..cmds.len() {
+        if to_skip > 0 {
+            to_skip -= 1;
+            continue;
+        }
         let cmd = &cmds[i];
         let next = if cmd.id == "if" {
             let ctrl = if_control(&cmds[i..])?;
-            i += ctrl.branches.len();
+            to_skip = ctrl.branches.len();
+            if ctrl.else_branch.is_none() {
+                to_skip -= 1;
+            }
             TopLevelCommand::If(ctrl)
         } else {
             non_if_command(&cmd)?
