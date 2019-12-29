@@ -6,7 +6,6 @@ use parse::Document;
 use parse::StringIsh;
 use parse::Test;
 
-
 type Result<Node> = std::result::Result<Node, String>;
 
 #[derive(Debug)]
