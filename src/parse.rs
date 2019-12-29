@@ -270,6 +270,15 @@ pub enum StringIsh<'doc> {
     MultiLine(Vec<&'doc str>),
 }
 
+impl<'doc> StringIsh<'doc> {
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Quoted(s) => s.clone(),
+            Self::MultiLine(ss) => ss.concat(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Test<'doc> {
     pub id: &'doc str,
