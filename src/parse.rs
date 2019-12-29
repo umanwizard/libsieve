@@ -293,12 +293,16 @@ fn parse_quoted_string() {
     );
 }
 
+#[cfg(test)]
 const HASHES: &'static [&'static str] = &["# This is a #hash comment\r\n"];
+#[cfg(test)]
 const NON_HASHES: &'static [&'static str] = &["This is not\r. \r\n", " # Nor this.\r\n"];
+#[cfg(test)]
 const BRACKETS: &'static [&'static str] = &[
     "/* This is a bracket comment*/",
     "/* And so /* \r\n is this */",
 ];
+#[cfg(test)]
 const NON_BRACKETS: &'static [&'static str] = &["/* But \n this fails */"];
 #[test]
 fn parse_id() {
