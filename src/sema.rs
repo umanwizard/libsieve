@@ -1,11 +1,11 @@
 use crate::parse;
 use parse::Argument;
-use parse::ArgumentGroup;
+
 use parse::Command;
 use parse::Document;
 use parse::StringIsh;
 use parse::Test;
-use std::str::FromStr;
+
 
 type Result<Node> = std::result::Result<Node, String>;
 
@@ -389,7 +389,7 @@ pub fn exists<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
     ));
 }
 
-pub fn false_<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn false_<'doc>(_cmd: &'doc Test) -> Result<TestCommand> {
     Ok(TestCommand::False)
 }
 
@@ -460,7 +460,7 @@ pub fn size<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
     }
 }
 
-pub fn true_<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn true_<'doc>(_cmd: &'doc Test) -> Result<TestCommand> {
     Ok(TestCommand::True)
 }
 
@@ -518,7 +518,7 @@ pub fn non_if_command<'doc>(cmd: &'doc Command) -> Result<TopLevelCommand> {
             if pos.len() != 1 {
                 Err(format!("Fileinto takes one positional arg."))
             } else if let NonTaggedArg::Strings(mb) = pos[0] {
-                if (mb.len() == 1) {
+                if mb.len() == 1 {
                     Ok(TopLevelCommand::Fileinto(mb[0].to_string()))
                 } else {
                     Err(format!("Fileinto arg must be a string."))
@@ -531,7 +531,7 @@ pub fn non_if_command<'doc>(cmd: &'doc Command) -> Result<TopLevelCommand> {
             if pos.len() != 1 {
                 Err(format!("Redirect takes one positional arg."))
             } else if let NonTaggedArg::Strings(addr) = pos[0] {
-                if (addr.len() == 1) {
+                if addr.len() == 1 {
                     Ok(TopLevelCommand::Redirect(addr[0].to_string()))
                 } else {
                     Err(format!("Redirect arg must be a string."))
