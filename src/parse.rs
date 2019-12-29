@@ -43,7 +43,7 @@ fn hash_comment(input: &str) -> IResult<&str, ()> {
 }
 
 fn non_newline(input: &str) -> IResult<&str, &str> {
-    recognize(none_of(("\n\r")))(input)
+    recognize(none_of("\n\r"))(input)
 }
 
 fn bracket_comment(input: &str) -> IResult<&str, ()> {
