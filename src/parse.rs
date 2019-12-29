@@ -1,10 +1,10 @@
 use nom::{
     branch::alt,
-    bytes::complete::{escaped_transform, tag, take, take_while, take_while1, take_while_m_n},
+    bytes::complete::{escaped_transform, tag, take, take_while, take_while1},
     character::complete::{crlf, digit1, none_of, not_line_ending, one_of, space0, space1},
-    combinator::{all_consuming, iterator, map, map_res, opt, recognize, value, verify},
-    error::{ErrorKind, ParseError},
-    multi::{fold_many0, many0, many1, many_till, separated_list, separated_nonempty_list},
+    combinator::{all_consuming, map, map_res, opt, recognize, value, verify},
+    error::ErrorKind,
+    multi::{many0, many_till, separated_nonempty_list},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
