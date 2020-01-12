@@ -1,5 +1,6 @@
 use crate::{email, sema};
 use email::ParsedMessage;
+use memmem::Searcher;
 use sema::Ast;
 use std::collections::HashSet;
 
@@ -39,11 +40,20 @@ impl<'a> Default for Context<'a> {
 }
 
 fn check_test<'a, 'm>(
-    _test: &'a sema::TestCommand,
+    test: &'a sema::TestCommand,
     _msg: &'m ParsedMessage<'m>,
     _ctx: &mut Context<'a>,
 ) -> Result<bool, String> {
-    unimplemented!()
+    use sema::TestCommand::*;
+    use sema::*;
+    match test {
+        Address(AddressTest {
+            address_part,
+            header_list,
+            key_list,
+        }) => unimplemented!(),
+        _ => unimplemented!(),
+    }
 }
 
 fn execute_command<'a, 'm>(
