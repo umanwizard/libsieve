@@ -7,8 +7,8 @@ use parse::StringIsh;
 use parse::Test;
 
 use itertools::Either;
+use memmem::{Searcher, TwoWaySearcher};
 use std::iter;
-use memmem::{TwoWaySearcher, Searcher};
 
 type Result<Node> = std::result::Result<Node, String>;
 
@@ -83,7 +83,9 @@ impl MatchKey {
             // TODO: We shouldn't need to construct this every time,
             // but lifetimes make that hard to do, since there isn't
             // an owning version of TwoWaySearcher.
-            Matcher::Contains(s) => TwoWaySearcher::new(s.as_bytes()).search_in(haystack.as_bytes()).is_some(),
+            Matcher::Contains(s) => TwoWaySearcher::new(s.as_bytes())
+                .search_in(haystack.as_bytes())
+                .is_some(),
             Matcher::Regex(r) => r.is_match(haystack),
         }
     }
