@@ -6,6 +6,10 @@ use parse::Document;
 use parse::StringIsh;
 use parse::Test;
 
+use itertools::Either;
+use std::iter;
+use memmem::{TwoWaySearcher, Searcher};
+
 type Result<Node> = std::result::Result<Node, String>;
 
 #[derive(Debug)]
@@ -47,21 +51,99 @@ pub enum TestCommand {
     Size(SizeTest),
     True,
 }
+
+#[derive(Debug)]
+pub enum Matcher {
+    Is(String),
+    Contains(String),
+    Regex(regex::Regex),
+}
+
+#[derive(Debug)]
+pub struct MatchKey {
+    pub ascii_casemap: bool,
+    pub matcher: Matcher,
+}
+
+impl MatchKey {
+    // yes, the RFC allows you to assume haystacks can be converted to unicode!
+    pub fn is_match(&self, haystack: &str) -> bool {
+        // string_holder exists to make sure a newly allocated string, if necessary, isn't deleted
+        // until the end of the frame
+        let mut string_holder = None;
+        let haystack = if self.ascii_casemap {
+            string_holder = Some(haystack.to_ascii_uppercase());
+            string_holder.as_ref().unwrap()
+        } else {
+            haystack
+        };
+
+        match &self.matcher {
+            Matcher::Is(s) => s == haystack,
+            // TODO: We shouldn't need to construct this every time,
+            // but lifetimes make that hard to do, since there isn't
+            // an owning version of TwoWaySearcher.
+            Matcher::Contains(s) => TwoWaySearcher::new(s.as_bytes()).search_in(haystack.as_bytes()).is_some(),
+            Matcher::Regex(r) => r.is_match(haystack),
+        }
+    }
+    fn new(cmp: Comparator, typ: MatchType, mut s: String) -> Result<MatchKey> {
+        let ascii_casemap = match cmp {
+            AsciiCasemap => true,
+            Octet => false,
+        };
+        if ascii_casemap {
+            s.make_ascii_uppercase();
+        }
+        let matcher = match typ {
+            MatchType::Is => Ok(Matcher::Is(s)),
+            MatchType::Contains => Ok(Matcher::Contains(s)),
+            MatchType::Matches => {
+                let mut is_escaping = false;
+                let s: String = iter::once('^')
+                    .chain(s.chars().flat_map(move |ch| match ch {
+                        '*' if !is_escaping => Either::Left(iter::once('.').chain(iter::once('*'))),
+                        '?' if !is_escaping => Either::Right(Either::Left(iter::once('.'))),
+                        '\\' if !is_escaping => {
+                            is_escaping = true;
+                            Either::Right(Either::Right(iter::empty()))
+                        }
+                        _ => {
+                            is_escaping = false;
+                            if regex_syntax::is_meta_character(ch) {
+                                Either::Left(iter::once('\\').chain(iter::once(ch)))
+                            } else {
+                                Either::Right(Either::Left(iter::once(ch)))
+                            }
+                        }
+                    }))
+                    .chain(iter::once('$'))
+                    .collect();
+                if is_escaping {
+                    Err(String::from("Unterminated escape"))
+                } else {
+                    Ok(Matcher::Regex(regex::Regex::new(&s).unwrap()))
+                }
+            }
+        };
+        matcher.map(|matcher| MatchKey {
+            ascii_casemap,
+            matcher,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct AddressTest {
-    pub comparator: Comparator,
     pub address_part: AddressPart,
-    pub match_type: MatchType,
     pub header_list: Vec<String>,
-    pub key_list: Vec<String>,
+    pub key_list: Vec<MatchKey>,
 }
 #[derive(Debug)]
 pub struct EnvelopeTest {
-    pub comparator: Comparator,
     pub address_part: AddressPart,
-    pub match_type: MatchType,
     pub envelope_part: Vec<String>,
-    pub key_list: Vec<String>,
+    pub key_list: Vec<MatchKey>,
 }
 #[derive(Debug)]
 pub struct ExistsTest {
@@ -69,10 +151,8 @@ pub struct ExistsTest {
 }
 #[derive(Debug)]
 pub struct HeaderTest {
-    pub comparator: Comparator,
-    pub match_type: MatchType,
     pub header_names: Vec<String>,
-    pub key_list: Vec<String>,
+    pub key_list: Vec<MatchKey>,
 }
 #[derive(Debug)]
 pub struct SizeTest {
@@ -314,12 +394,17 @@ pub fn address<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
     }
     if let NonTaggedArg::Strings(hl) = args.positional[0] {
         if let NonTaggedArg::Strings(kl) = args.positional[1] {
+            let comparator = args.comparator.unwrap_or_else(Default::default);
+            let match_type = args.match_type.unwrap_or_else(Default::default);
+            let key_list: Result<Vec<_>> = kl
+                .iter()
+                .map(StringIsh::to_string)
+                .map(|s| MatchKey::new(comparator, match_type, s))
+                .collect();
             return Ok(TestCommand::Address(AddressTest {
-                comparator: args.comparator.unwrap_or_else(Default::default),
                 address_part: args.address_part.unwrap_or_else(Default::default),
-                match_type: args.match_type.unwrap_or_else(Default::default),
                 header_list: hl.iter().map(StringIsh::to_string).collect(),
-                key_list: kl.iter().map(StringIsh::to_string).collect(),
+                key_list: key_list?,
             }));
         }
     }
@@ -356,12 +441,17 @@ pub fn envelope<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
     }
     if let NonTaggedArg::Strings(ep) = args.positional[0] {
         if let NonTaggedArg::Strings(kl) = args.positional[1] {
+            let comparator = args.comparator.unwrap_or_else(Default::default);
+            let match_type = args.match_type.unwrap_or_else(Default::default);
+            let key_list: Result<Vec<_>> = kl
+                .iter()
+                .map(StringIsh::to_string)
+                .map(|s| MatchKey::new(comparator, match_type, s))
+                .collect();
             return Ok(TestCommand::Envelope(EnvelopeTest {
-                comparator: args.comparator.unwrap_or_else(Default::default),
                 address_part: args.address_part.unwrap_or_else(Default::default),
-                match_type: args.match_type.unwrap_or_else(Default::default),
                 envelope_part: ep.iter().map(StringIsh::to_string).collect(),
-                key_list: kl.iter().map(StringIsh::to_string).collect(),
+                key_list: key_list?,
             }));
         }
     }
@@ -405,11 +495,16 @@ pub fn header<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
     }
     if let NonTaggedArg::Strings(hn) = args.positional[0] {
         if let NonTaggedArg::Strings(kl) = args.positional[1] {
+            let comparator = args.comparator.unwrap_or_else(Default::default);
+            let match_type = args.match_type.unwrap_or_else(Default::default);
+            let key_list: Result<Vec<_>> = kl
+                .iter()
+                .map(StringIsh::to_string)
+                .map(|s| MatchKey::new(comparator, match_type, s))
+                .collect();
             return Ok(TestCommand::Header(HeaderTest {
-                comparator: args.comparator.unwrap_or_else(Default::default),
-                match_type: args.match_type.unwrap_or_else(Default::default),
                 header_names: hn.iter().map(StringIsh::to_string).collect(),
-                key_list: kl.iter().map(StringIsh::to_string).collect(),
+                key_list: key_list?,
             }));
         }
     }
