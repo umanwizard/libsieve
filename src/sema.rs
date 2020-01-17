@@ -91,8 +91,8 @@ impl MatchKey {
     }
     fn new(cmp: Comparator, typ: MatchType, mut s: String) -> Result<MatchKey> {
         let ascii_casemap = match cmp {
-            AsciiCasemap => true,
-            Octet => false,
+            Comparator::AsciiCasemap => true,
+            Comparator::Octet => false,
         };
         if ascii_casemap {
             s.make_ascii_uppercase();

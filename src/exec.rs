@@ -51,8 +51,8 @@ fn check_test<'a, 'm>(
             address_part,
             header_list,
             key_list,
-        }) => unimplemented!(),
-        _ => unimplemented!(),
+        }) => todo!(),
+        _ => todo!(),
     }
 }
 
@@ -133,5 +133,5 @@ pub fn execute<'a, 'm>(
 ) -> Result<Vec<Action<'a>>, String> {
     let mut ctx = Context::default();
     execute_block(&ast.commands, msg, &mut ctx)?;
-    unimplemented!()
+    todo!()
 }
