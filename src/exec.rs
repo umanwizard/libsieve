@@ -1,7 +1,6 @@
 use crate::{email, sema};
 use anyhow::bail;
 use email::{ParsedMessage, SmtpEnvelope};
-use memmem::Searcher;
 use sema::Ast;
 use sema::{AddressPart, AddressTest, EnvelopeTest, ExistsTest, HeaderTest, SizeTest, TestCommand};
 use std::collections::HashSet;

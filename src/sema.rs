@@ -68,12 +68,10 @@ pub struct MatchKey {
 impl MatchKey {
     // yes, the RFC allows you to assume haystacks can be converted to unicode!
     pub fn is_match(&self, haystack: &str) -> bool {
-        // string_holder exists to make sure a newly allocated string, if necessary, isn't deleted
-        // until the end of the frame
-        let mut string_holder = None;
+        let mut _string_holder = None;
         let haystack = if self.ascii_casemap {
-            string_holder = Some(haystack.to_ascii_uppercase());
-            string_holder.as_ref().unwrap()
+            _string_holder = Some(haystack.to_ascii_uppercase());
+            _string_holder.as_ref().unwrap()
         } else {
             haystack
         };
