@@ -40,7 +40,7 @@ pub enum MsgParseError {
 }
 
 pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
-    let mut lines = ByteLines { remaining: msg };
+    let lines = ByteLines { remaining: msg };
     let mut headers_idx: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
     let mut headers = vec![];
     let mut last_header: Option<(Vec<u8>, Vec<u8>)> = None;
@@ -67,7 +67,7 @@ pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
                     Occupied(mut oe) => {
                         oe.get_mut().push(headers.len() - 1);
                     }
-                    Vacant(mut ve) => {
+                    Vacant(ve) => {
                         ve.insert(vec![headers.len() - 1]);
                     }
                 }
