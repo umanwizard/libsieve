@@ -6,17 +6,16 @@ use parse::Document;
 use parse::StringIsh;
 use parse::Test;
 
+use anyhow::bail;
 use itertools::Either;
 use memmem::{Searcher, TwoWaySearcher};
 use std::iter;
 
-type Result<Node> = std::result::Result<Node, String>;
-
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Ast {
     pub commands: Vec<TopLevelCommand>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TopLevelCommand {
     If(IfControl),
     Require(RequireControl),
@@ -26,19 +25,19 @@ pub enum TopLevelCommand {
     Keep,
     Discard,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct IfControl {
     pub branches: Vec<(TestCommand, Block)>,
     pub else_branch: Option<Block>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Block(pub Vec<TopLevelCommand>);
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RequireControl {
     pub capabilities: Vec<String>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TestCommand {
     Address(AddressTest),
     Allof(Vec<TestCommand>),
@@ -52,14 +51,14 @@ pub enum TestCommand {
     True,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Matcher {
     Is(String),
     Contains(String),
     Regex(regex::Regex),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MatchKey {
     pub ascii_casemap: bool,
     pub matcher: Matcher,
@@ -87,7 +86,7 @@ impl MatchKey {
             Matcher::Regex(r) => r.is_match(haystack),
         }
     }
-    fn new(cmp: Comparator, typ: MatchType, mut s: String) -> Result<MatchKey> {
+    fn new(cmp: Comparator, typ: MatchType, mut s: String) -> anyhow::Result<MatchKey> {
         let ascii_casemap = match cmp {
             Comparator::AsciiCasemap => true,
             Comparator::Octet => false,
@@ -120,7 +119,7 @@ impl MatchKey {
                     .chain(iter::once('$'))
                     .collect();
                 if is_escaping {
-                    Err(String::from("Unterminated escape"))
+                    bail!("Unterminated escape");
                 } else {
                     Ok(Matcher::Regex(regex::Regex::new(&s).unwrap()))
                 }
@@ -133,28 +132,28 @@ impl MatchKey {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AddressTest {
     pub address_part: AddressPart,
     pub header_list: Vec<String>,
     pub key_list: Vec<MatchKey>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EnvelopeTest {
     pub address_part: AddressPart,
     pub envelope_part: Vec<String>,
     pub key_list: Vec<MatchKey>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ExistsTest {
     pub header_names: Vec<String>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HeaderTest {
     pub header_names: Vec<String>,
     pub key_list: Vec<MatchKey>,
 }
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SizeTest {
     pub over: bool,
     pub limit: u64,
@@ -193,12 +192,12 @@ impl Default for MatchType {
     }
 }
 
-pub fn analyze<'doc>(doc: &'doc Document) -> Result<Ast> {
+pub fn analyze<'d>(doc: Document<'d>) -> anyhow::Result<Ast> {
     let commands = commands(&doc.commands)?;
     Ok(Ast { commands })
 }
 
-pub fn commands<'doc>(cmds: &'doc [Command]) -> Result<Vec<TopLevelCommand>> {
+pub fn commands<'doc>(cmds: &'doc [Command]) -> anyhow::Result<Vec<TopLevelCommand>> {
     let mut ret = Vec::new();
     let mut to_skip = 0;
     for i in 0..cmds.len() {
@@ -222,7 +221,7 @@ pub fn commands<'doc>(cmds: &'doc [Command]) -> Result<Vec<TopLevelCommand>> {
     Ok(ret)
 }
 
-pub fn if_control<'doc>(cmds: &'doc [Command]) -> Result<IfControl> {
+pub fn if_control<'doc>(cmds: &'doc [Command]) -> anyhow::Result<IfControl> {
     let mut branches = vec![];
     let mut else_branch = None;
     for i in 0..cmds.len() {
@@ -235,7 +234,7 @@ pub fn if_control<'doc>(cmds: &'doc [Command]) -> Result<IfControl> {
                 "elsif" => branches.push(if_branch(cmd)?),
                 "else" => {
                     if i != cmds.len() - 1 {
-                        return Err("Else cannot be followed by elsif or if".to_owned());
+                        bail!("Else cannot be followed by elsif or if");
                     }
                     else_branch = Some(e_branch(cmd)?);
                 }
@@ -249,26 +248,26 @@ pub fn if_control<'doc>(cmds: &'doc [Command]) -> Result<IfControl> {
     })
 }
 
-pub fn if_branch<'doc>(cmd: &'doc Command) -> Result<(TestCommand, Block)> {
+pub fn if_branch<'doc>(cmd: &'doc Command) -> anyhow::Result<(TestCommand, Block)> {
     if cmd.args.inner.len() > 0 {
-        Err("if/elsif cannot have non-test arguments.".to_owned())
+        bail!("if/elsif cannot have non-test arguments.");
     } else if cmd.args.tests.len() != 1 {
-        Err("if/elsif must have exactly one test.".to_owned())
+        bail!("if/elsif must have exactly one test.");
     } else {
         Ok((test_command(&cmd.args.tests[0])?, block(&cmd.block)?))
     }
 }
 
-pub fn e_branch<'doc>(cmd: &'doc Command) -> Result<Block> {
+pub fn e_branch<'doc>(cmd: &'doc Command) -> anyhow::Result<Block> {
     assert_eq!("else", cmd.id.to_lowercase().as_str());
     if cmd.args.inner.len() > 0 || cmd.args.tests.len() > 0 {
-        Err("else cannot have any arguments.".to_owned())
+        bail!("else cannot have any arguments.");
     } else {
         Ok(block(&cmd.block)?)
     }
 }
 
-pub fn test_command<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn test_command<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     let result = match cmd.id.to_lowercase().as_str() {
         "address" => address(&cmd),
         "allof" => allof(&cmd),
@@ -280,7 +279,7 @@ pub fn test_command<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
         "not" => not(&cmd),
         "size" => size(&cmd),
         "true" => true_(&cmd),
-        _ => Err(format!("Unrecognized test command: {}", cmd.id)),
+        _ => bail!("Unrecognized test command: {}", cmd.id),
     };
     result
 }
@@ -299,7 +298,7 @@ struct Args<'doc> {
     positional: Vec<NonTaggedArg<'doc>>,
 }
 
-fn analyze_args<'doc>(args: &'doc [Argument]) -> Result<Args<'doc>> {
+fn analyze_args<'doc>(args: &'doc [Argument]) -> anyhow::Result<Args<'doc>> {
     let mut ret: Args<'doc> = Default::default();
     let mut it = args.iter();
     enum ArgKind<'doc> {
@@ -315,24 +314,21 @@ fn analyze_args<'doc>(args: &'doc [Argument]) -> Result<Args<'doc>> {
             None => break,
             Some(Argument::Tag(s)) => {
                 if ret.positional.len() > 0 {
-                    return Err(format!("Tag {} after positional argument", s));
+                    bail!("Tag {} after positional argument", s);
                 }
                 match s.to_lowercase().as_ref() {
                     "comparator" => {
                         if let Some(Argument::Strings(ss)) = it.next() {
                             if ss.len() != 1 {
-                                return Err(format!(
-                                    "Comparator {} has more than one argument.",
-                                    s
-                                ));
+                                bail!("Comparator {} has more than one argument.", s);
                             }
                             match ss[0].to_string().as_ref() {
                                 "i;octet" => ArgKind::Comparator(Comparator::Octet),
                                 "i;ascii-casemap" => ArgKind::Comparator(Comparator::AsciiCasemap),
-                                _ => return Err(format!("Unrecognized comparator: {}", s)),
+                                _ => bail!("Unrecognized comparator: {}", s),
                             }
                         } else {
-                            return Err(format!("Comparator {} has no argument.", s));
+                            bail!("Comparator {} has no argument.", s);
                         }
                     }
                     "contains" => ArgKind::MatchType(MatchType::Contains),
@@ -343,7 +339,7 @@ fn analyze_args<'doc>(args: &'doc [Argument]) -> Result<Args<'doc>> {
                     "all" => ArgKind::AddressPart(AddressPart::All),
                     "over" => ArgKind::Over(true),
                     "under" => ArgKind::Over(false),
-                    _ => return Err(format!("Unrecognized tag: {}", s)),
+                    _ => bail!("Unrecognized tag: {}", s),
                 }
             }
             Some(Argument::Strings(ss)) => ArgKind::Positional(NonTaggedArg::Strings(&ss)),
@@ -352,25 +348,25 @@ fn analyze_args<'doc>(args: &'doc [Argument]) -> Result<Args<'doc>> {
         match arg {
             ArgKind::Comparator(c) => {
                 if ret.comparator.is_some() {
-                    return Err(format!("Comparator specified twice."));
+                    bail!("Comparator specified twice.");
                 }
                 ret.comparator = Some(c);
             }
             ArgKind::AddressPart(ap) => {
                 if ret.address_part.is_some() {
-                    return Err(format!("Address part specified twice."));
+                    bail!("Address part specified twice.");
                 }
                 ret.address_part = Some(ap);
             }
             ArgKind::MatchType(mt) => {
                 if ret.match_type.is_some() {
-                    return Err(format!("Match type specified twice."));
+                    bail!("Match type specified twice.");
                 }
                 ret.match_type = Some(mt);
             }
             ArgKind::Over(over) => {
                 if ret.over.is_some() {
-                    return Err(format!("At most one of :over or :under is allowed."));
+                    bail!("At most one of :over or :under is allowed.");
                 }
                 ret.over = Some(over);
             }
@@ -382,21 +378,19 @@ fn analyze_args<'doc>(args: &'doc [Argument]) -> Result<Args<'doc>> {
     Ok(ret)
 }
 
-pub fn address<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn address<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     if !cmd.args.tests.is_empty() {
-        return Err(format!("Address cannot have test arguments."));
+        bail!("Address cannot have test arguments.");
     }
     let args: Args<'doc> = analyze_args(&cmd.args.inner)?;
     if args.positional.len() != 2 {
-        return Err(format!(
-            "Address test takes exactly two positional arguments."
-        ));
+        bail!("Address test takes exactly two positional arguments.");
     }
     if let NonTaggedArg::Strings(hl) = args.positional[0] {
         if let NonTaggedArg::Strings(kl) = args.positional[1] {
             let comparator = args.comparator.unwrap_or_else(Default::default);
             let match_type = args.match_type.unwrap_or_else(Default::default);
-            let key_list: Result<Vec<_>> = kl
+            let key_list: anyhow::Result<Vec<_>> = kl
                 .iter()
                 .map(StringIsh::to_string)
                 .map(|s| MatchKey::new(comparator, match_type, s))
@@ -408,42 +402,40 @@ pub fn address<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
             }));
         }
     }
-    return Err(format!(
-        "Address headers and keys must be strings or string lists."
-    ));
+    bail!("Address headers and keys must be strings or string lists.");
 }
 
-pub fn allof<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn allof<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     if !cmd.args.inner.is_empty() {
-        Err(format!("allof only takes other tests as arguments."))
+        bail!("allof only takes other tests as arguments.");
     } else {
-        let res: Result<Vec<_>> = cmd.args.tests.iter().map(|t| test_command(t)).collect();
+        let res: anyhow::Result<Vec<_>> = cmd.args.tests.iter().map(|t| test_command(t)).collect();
         Ok(TestCommand::Allof(res?))
     }
 }
 
-pub fn anyof<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn anyof<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     if !cmd.args.inner.is_empty() {
-        Err(format!("anyof only takes other tests as arguments."))
+        bail!("anyof only takes other tests as arguments.");
     } else {
-        let res: Result<Vec<_>> = cmd.args.tests.iter().map(|t| test_command(t)).collect();
+        let res: anyhow::Result<Vec<_>> = cmd.args.tests.iter().map(|t| test_command(t)).collect();
         Ok(TestCommand::Anyof(res?))
     }
 }
 
-pub fn envelope<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn envelope<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     if !cmd.args.tests.is_empty() {
-        return Err(format!("Envelope cannot have test arguments."));
+        bail!("Envelope cannot have test arguments.");
     }
     let args: Args<'doc> = analyze_args(&cmd.args.inner)?;
     if args.positional.len() != 2 {
-        return Err(format!("Envelope takes exactly two positional arguments."));
+        bail!("Envelope takes exactly two positional arguments.");
     }
     if let NonTaggedArg::Strings(ep) = args.positional[0] {
         if let NonTaggedArg::Strings(kl) = args.positional[1] {
             let comparator = args.comparator.unwrap_or_else(Default::default);
             let match_type = args.match_type.unwrap_or_else(Default::default);
-            let key_list: Result<Vec<_>> = kl
+            let key_list: anyhow::Result<Vec<_>> = kl
                 .iter()
                 .map(StringIsh::to_string)
                 .map(|s| MatchKey::new(comparator, match_type, s))
@@ -455,49 +447,45 @@ pub fn envelope<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
             }));
         }
     }
-    return Err(format!(
-        "Envelope parts and keys must be strings or string lists."
-    ));
+    bail!("Envelope parts and keys must be strings or string lists.");
 }
 
-pub fn exists<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn exists<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     if !cmd.args.tests.is_empty() {
-        return Err(format!("Exists cannot have test arguments."));
+        bail!("Exists cannot have test arguments.");
     }
     let args: Args<'doc> = analyze_args(&cmd.args.inner)?;
     if args.positional.len() != 1 {
-        return Err(format!("Exists takes exactly one positional argument."));
+        bail!("Exists takes exactly one positional argument.");
     }
     if let NonTaggedArg::Strings(hn) = args.positional[0] {
         return Ok(TestCommand::Exists(ExistsTest {
             header_names: hn.iter().map(StringIsh::to_string).collect(),
         }));
     }
-    return Err(format!(
-        "Exists header names must be a string or string list."
-    ));
+    bail!("Exists header names must be a string or string list.");
 }
 
-pub fn false_<'doc>(_cmd: &'doc Test) -> Result<TestCommand> {
+pub fn false_<'doc>(_cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     Ok(TestCommand::False)
 }
 
-pub fn header<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn header<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     if !cmd.args.tests.is_empty() {
-        return Err(format!("Header cannot have test arguments."));
+        bail!("Header cannot have test arguments.");
     }
     let args: Args<'doc> = analyze_args(&cmd.args.inner)?;
     if args.positional.len() != 2 {
-        return Err(format!("Header takes exactly two positional arguments."));
+        bail!("Header takes exactly two positional arguments.");
     }
     if args.address_part.is_some() {
-        return Err(format!("Header does not take an address part."));
+        bail!("Header does not take an address part.");
     }
     if let NonTaggedArg::Strings(hn) = args.positional[0] {
         if let NonTaggedArg::Strings(kl) = args.positional[1] {
             let comparator = args.comparator.unwrap_or_else(Default::default);
             let match_type = args.match_type.unwrap_or_else(Default::default);
-            let key_list: Result<Vec<_>> = kl
+            let key_list: anyhow::Result<Vec<_>> = kl
                 .iter()
                 .map(StringIsh::to_string)
                 .map(|s| MatchKey::new(comparator, match_type, s))
@@ -508,132 +496,130 @@ pub fn header<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
             }));
         }
     }
-    return Err(format!(
-        "Header names and keys must be strings or string lists."
-    ));
+    bail!("Header names and keys must be strings or string lists.");
 }
 
-pub fn not<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn not<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     if !cmd.args.tests.len() == 1 {
-        return Err(format!("Not takes exactly one test argument."));
+        bail!("Not takes exactly one test argument.");
     }
     let args: Args<'doc> = analyze_args(&cmd.args.inner)?;
     if args != Default::default() {
-        return Err(format!("Not takes no positional or tagged arguments."));
+        bail!("Not takes no positional or tagged arguments.");
     }
     Ok(TestCommand::Not(Box::new(test_command(
         &cmd.args.tests[0],
     )?)))
 }
 
-pub fn size<'doc>(cmd: &'doc Test) -> Result<TestCommand> {
+pub fn size<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     if !cmd.args.tests.is_empty() {
-        return Err(format!("Size cannot have test arguments."));
+        bail!("Size cannot have test arguments.");
     }
     let args = analyze_args(&cmd.args.inner)?;
     if args.address_part.is_some() {
-        return Err(format!("Size does not take an address part."));
+        bail!("Size does not take an address part.");
     }
     if args.match_type.is_some() {
-        return Err(format!("Size does not take an match type."));
+        bail!("Size does not take an match type.");
     }
     if args.comparator.is_some() {
-        return Err(format!("Size does not take a comparator."));
+        bail!("Size does not take a comparator.");
     }
     let over = match args.over {
-        None => return Err(format!("Size takes exactly one of :over or :under.")),
+        None => bail!("Size takes exactly one of :over or :under."),
         Some(over) => over,
     };
     if args.positional.len() != 1 {
-        return Err(format!("Size takes exactly one positional argument."));
+        bail!("Size takes exactly one positional argument.");
     }
     if let NonTaggedArg::Number(limit) = args.positional[0] {
         Ok(TestCommand::Size(SizeTest { over, limit }))
     } else {
-        Err(format!("Size's positional argument must be a number."))
+        bail!("Size's positional argument must be a number.");
     }
 }
 
-pub fn true_<'doc>(_cmd: &'doc Test) -> Result<TestCommand> {
+pub fn true_<'doc>(_cmd: &'doc Test) -> anyhow::Result<TestCommand> {
     Ok(TestCommand::True)
 }
 
-pub fn block<'doc>(cmd: &'doc [Command]) -> Result<Block> {
+pub fn block<'doc>(cmd: &'doc [Command]) -> anyhow::Result<Block> {
     let x = commands(cmd)?;
     Ok(Block(x))
 }
 
-pub fn non_if_command<'doc>(cmd: &'doc Command) -> Result<TopLevelCommand> {
+pub fn non_if_command<'doc>(cmd: &'doc Command) -> anyhow::Result<TopLevelCommand> {
     if !cmd.args.tests.is_empty() {
-        return Err(format!("{} does not take test arguments.", cmd.id));
+        bail!("{} does not take test arguments.", cmd.id);
     }
     let mut args = analyze_args(&cmd.args.inner)?;
     let pos = std::mem::replace(&mut args.positional, vec![]);
     if pos.len() > 1 {
-        return Err(format!("Too many args for {}.", cmd.id));
+        bail!("Too many args for {}.", cmd.id);
     }
     if args != Default::default() {
-        return Err(format!("{} does not take tagged arguments.", cmd.id));
+        bail!("{} does not take tagged arguments.", cmd.id);
     }
     match cmd.id.to_lowercase().as_str() {
         "require" => {
             if pos.len() != 1 {
-                Err(format!("Require takes one positional arg."))
+                bail!("Require takes one positional arg.");
             } else if let NonTaggedArg::Strings(ss) = pos[0] {
                 Ok(TopLevelCommand::Require(RequireControl {
                     capabilities: ss.iter().map(StringIsh::to_string).collect(),
                 }))
             } else {
-                Err(format!("Require arg must be a string or string list."))
+                bail!("Require arg must be a string or string list.");
             }
         }
         "stop" => {
             if !pos.is_empty() {
-                Err(format!("stop takes no arguments."))
+                bail!("stop takes no arguments.");
             } else {
                 Ok(TopLevelCommand::Stop)
             }
         }
         "keep" => {
             if !pos.is_empty() {
-                Err(format!("keep takes no arguments."))
+                bail!("keep takes no arguments.");
             } else {
                 Ok(TopLevelCommand::Keep)
             }
         }
         "discard" => {
             if !pos.is_empty() {
-                Err(format!("discard takes no arguments."))
+                bail!("discard takes no arguments.");
             } else {
                 Ok(TopLevelCommand::Discard)
             }
         }
         "fileinto" => {
             if pos.len() != 1 {
-                Err(format!("Fileinto takes one positional arg."))
+                bail!("Fileinto takes one positional arg.");
             } else if let NonTaggedArg::Strings(mb) = pos[0] {
                 if mb.len() == 1 {
                     Ok(TopLevelCommand::Fileinto(mb[0].to_string()))
                 } else {
-                    Err(format!("Fileinto arg must be a string."))
+                    bail!("Fileinto arg must be a string.");
                 }
             } else {
-                Err(format!("Fileinto arg must be a string."))
+                bail!("Fileinto arg must be a string.");
             }
         }
         "redirect" => {
             if pos.len() != 1 {
-                Err(format!("Redirect takes one positional arg."))
+                bail!("Redirect takes one positional arg.");
             } else if let NonTaggedArg::Strings(addr) = pos[0] {
                 if addr.len() == 1 {
                     Ok(TopLevelCommand::Redirect(addr[0].to_string()))
                 } else {
-                    Err(format!("Redirect arg must be a string."))
+                    bail!("Redirect arg must be a string.");
                 }
             } else {
-                Err(format!("Redirect arg must be a string."))
+                bail!("Redirect arg must be a string.");
             }
         }
-        _ => Err(format!("Unrecognized command.")),
+        _ => bail!("Unrecognized command."),
     }
 }

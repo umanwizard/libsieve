@@ -3,7 +3,7 @@ use anyhow::bail;
 use email::{ParsedMessage, SmtpEnvelope};
 use sema::Ast;
 use sema::{AddressPart, AddressTest, EnvelopeTest, ExistsTest, HeaderTest, SizeTest, TestCommand};
-use std::collections::HashSet;
+use std::collections::{hash_map::Entry::Occupied, hash_map::Entry::Vacant, HashMap, HashSet};
 
 pub enum Action<'a> {
     Fileinto(&'a str),
@@ -52,6 +52,7 @@ fn extract_ap(part: AddressPart, address: &str) -> anyhow::Result<&str> {
 fn check_test<'a, 'm>(
     test: &'a sema::TestCommand,
     msg: &'m ParsedMessage,
+    header_idx: &'m HashMap<Vec<u8>, Vec<usize>>,
     ctx: &mut Context<'a>,
     env: &'m SmtpEnvelope,
 ) -> anyhow::Result<bool> {
@@ -62,8 +63,11 @@ fn check_test<'a, 'm>(
             key_list,
         }) => {
             for h in header_list {
-                for &idx in msg.headers_idx.get(h.as_bytes()).unwrap_or(&vec![]) {
-                    let txt = extract_ap(*address_part, std::str::from_utf8(&msg.headers[idx].1)?)?;
+                for &idx in header_idx.get(h.as_bytes()).unwrap_or(&vec![]) {
+                    let txt = extract_ap(
+                        *address_part,
+                        std::str::from_utf8(msg.headers[idx].1.unfolded())?,
+                    )?;
                     for k in key_list {
                         if k.is_match(txt) {
                             return Ok(true);
@@ -75,7 +79,7 @@ fn check_test<'a, 'm>(
         }
         TestCommand::Allof(inner) => {
             for inner in inner {
-                let res = check_test(inner, msg, ctx, env)?;
+                let res = check_test(inner, msg, header_idx, ctx, env)?;
                 if !res {
                     return Ok(false);
                 }
@@ -84,7 +88,7 @@ fn check_test<'a, 'm>(
         }
         TestCommand::Anyof(inner) => {
             for inner in inner {
-                if check_test(inner, msg, ctx, env)? {
+                if check_test(inner, msg, header_idx, ctx, env)? {
                     return Ok(true);
                 }
             }
@@ -114,22 +118,21 @@ fn check_test<'a, 'm>(
         }
         TestCommand::Exists(ExistsTest { header_names }) => Ok(header_names
             .iter()
-            .all(|hn| msg.headers_idx.get(hn.as_bytes()).is_some())),
+            .all(|hn| header_idx.get(hn.as_bytes()).is_some())),
         TestCommand::False => Ok(false),
         TestCommand::Header(HeaderTest {
             header_names,
             key_list,
         }) => {
             for h in header_names {
-                for (_, value) in msg
-                    .headers_idx
+                for (_, value) in header_idx
                     .get(h.as_bytes())
                     .unwrap_or(&vec![])
                     .iter()
                     .map(|&idx| &msg.headers[idx])
                 {
                     for k in key_list {
-                        if k.is_match(std::str::from_utf8(value)?) {
+                        if k.is_match(std::str::from_utf8(value.unfolded())?) {
                             return Ok(true);
                         }
                     }
@@ -137,7 +140,7 @@ fn check_test<'a, 'm>(
             }
             Ok(false)
         }
-        TestCommand::Not(inner) => check_test(&**inner, msg, ctx, env),
+        TestCommand::Not(inner) => check_test(&**inner, msg, header_idx, ctx, env),
         TestCommand::Size(SizeTest { over, limit }) => Ok(if *over {
             (msg.size as u64) > *limit
         } else {
@@ -150,6 +153,7 @@ fn check_test<'a, 'm>(
 fn execute_command<'a, 'm>(
     cmd: &'a sema::TopLevelCommand,
     msg: &'m ParsedMessage,
+    header_idx: &'m HashMap<Vec<u8>, Vec<usize>>,
     ctx: &mut Context<'a>,
     env: &'m SmtpEnvelope,
 ) -> anyhow::Result<()> {
@@ -162,15 +166,15 @@ fn execute_command<'a, 'm>(
         }) => {
             let mut hit = false;
             for (test, block) in branches {
-                if check_test(test, msg, ctx, env)? {
-                    execute_block(&block.0, msg, ctx, env)?;
+                if check_test(test, msg, header_idx, ctx, env)? {
+                    execute_block(&block.0, msg, header_idx, ctx, env)?;
                     hit = true;
                     break;
                 }
             }
             if !hit {
                 if let Some(Block(cmds)) = else_branch {
-                    execute_block(&cmds, msg, ctx, env)?;
+                    execute_block(&cmds, msg, header_idx, ctx, env)?;
                 }
             }
         }
@@ -208,11 +212,12 @@ fn execute_command<'a, 'm>(
 fn execute_block<'a, 'm>(
     cmds: &'a [sema::TopLevelCommand],
     msg: &'m ParsedMessage,
+    header_idx: &'m HashMap<Vec<u8>, Vec<usize>>,
     ctx: &mut Context<'a>,
     env: &'m SmtpEnvelope,
 ) -> anyhow::Result<()> {
     for cmd in cmds {
-        execute_command(cmd, msg, ctx, env)?;
+        execute_command(cmd, msg, header_idx, ctx, env)?;
         if ctx.stopped {
             break;
         }
@@ -225,8 +230,18 @@ pub fn execute<'a, 'm>(
     msg: &'m ParsedMessage,
     env: &'m SmtpEnvelope,
 ) -> anyhow::Result<Vec<Action<'a>>> {
+    let mut header_idx: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
+    for (idx, (name, _)) in msg.headers.iter().enumerate() {
+        // TODO - avoid the clone with the raw entry api.
+        match header_idx.entry(name.clone()) {
+            Occupied(oe) => oe.into_mut().push(idx),
+            Vacant(ve) => {
+                ve.insert(vec![]);
+            }
+        }
+    }
     let mut ctx = Context::default();
-    execute_block(&ast.commands, msg, &mut ctx, env)?;
+    execute_block(&ast.commands, msg, &header_idx, &mut ctx, env)?;
     let mut result = vec![];
     result.extend(ctx.redirects.iter().map(|&addr| Action::Redirect(addr)));
     result.extend(ctx.fileintos.iter().map(|&file| Action::Fileinto(file)));
