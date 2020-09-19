@@ -37,7 +37,7 @@ struct ByteLines<'a> {
 impl<'a> Iterator for ByteLines<'a> {
     type Item = &'a [u8];
     fn next(&mut self) -> Option<Self::Item> {
-        for i in 0..(self.remaining.len() - 1) {
+        for i in 0..self.remaining.len() {
             if self.remaining[i] == b'\r' && self.remaining[i + 1] == b'\n' {
                 let ret = &self.remaining[0..i];
                 self.remaining = &self.remaining[i + 2..];
