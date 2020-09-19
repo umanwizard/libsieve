@@ -115,42 +115,44 @@ fn trim_bytes<'a>(bytes: &'a [u8]) -> &'a [u8] {
 }
 
 pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
-    eprintln!("Parsing msg: {}", String::from_utf8_lossy(msg));
     let lines = ByteLines { remaining: msg };
     let mut headers = vec![];
     let mut last_header: Option<(Vec<u8>, MessageHeader)> = None;
     let mut body = vec![];
+    let mut in_body = false;
     for l in lines {
-        eprintln!("Line: {}", String::from_utf8_lossy(l));
-        let is_continuation = l.get(0).map(u8::is_ascii_whitespace).unwrap_or(false);
-        eprintln!("Is continuation? {}", is_continuation);
-        if is_continuation {
-            let header = &mut last_header
-                .as_mut()
-                .ok_or(MsgParseError::ContinuationAtBeginning)?
-                .1;
-            header.push_continuation(l)
+        if in_body {
+            body.extend_from_slice(l);
+            body.extend(b"\r\n")
         } else {
-            if let Some((name, value)) = last_header.take() {
-                headers.push((name.clone(), value));
+            let is_continuation = l.get(0).map(u8::is_ascii_whitespace).unwrap_or(false);
+            if is_continuation {
+                let header = &mut last_header
+                    .as_mut()
+                    .ok_or(MsgParseError::ContinuationAtBeginning)?
+                    .1;
+                header.push_continuation(l)
+            } else {
+                if let Some((name, value)) = last_header.take() {
+                    headers.push((name.clone(), value));
+                }
+                if l.len() == 0 {
+                    in_body = true;
+                    continue;
+                }
+                let (name, value) = l
+                    .iter()
+                    .position(|&ch| ch == b':')
+                    .map(|pos| (&l[..pos], l[pos + 1..].to_vec()))
+                    .ok_or_else(|| MsgParseError::MalformedHeader(l.to_vec()))?;
+                last_header = Some((
+                    name.to_vec(),
+                    MessageHeader {
+                        raw: vec![value.clone()],
+                        unfolded: value,
+                    },
+                ));
             }
-            if l.len() == 0 {
-                body = lines.remaining.to_vec();
-                eprintln!("Breaking, body is the rest.");
-                break;
-            }
-            let (name, value) = l
-                .iter()
-                .position(|&ch| ch == b':')
-                .map(|pos| (&l[..pos], l[pos + 1..].to_vec()))
-                .ok_or_else(|| MsgParseError::MalformedHeader(l.to_vec()))?;
-            last_header = Some((
-                name.to_vec(),
-                MessageHeader {
-                    raw: vec![value.clone()],
-                    unfolded: value,
-                },
-            ));
         }
     }
     Ok(ParsedMessage {
@@ -158,4 +160,28 @@ pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
         body,
         size: msg.len(),
     })
+}
+
+#[test]
+fn test_parse() {
+    let test = r#"To: brennan.vincent@gmail.com
+From: Brennan Vincent <brennan@umanwizard.com>
+Subject: this is a test
+Message-ID: <422f4e65-56da-24e2-3467-f60f2cc4d943@umanwizard.com>
+Date: Fri, 18 Sep 2020 23:35:23 -0400
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101
+ Thunderbird/68.10.0
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8; format=flowed
+Content-Transfer-Encoding: 7bit
+Content-Language: en-US
+Bonjour:Tout
+  Le
+ monde!
+
+testing! 3
+"#
+    .replace('\n', "\r\n");
+    let pm = parse(test.as_bytes()).unwrap();
+    assert!(pm.to_vec() == test.to_string().into_bytes());
 }
