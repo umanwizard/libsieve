@@ -115,6 +115,7 @@ fn trim_bytes<'a>(bytes: &'a [u8]) -> &'a [u8] {
 }
 
 pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
+    eprintln!("Parsing msg: {}", String::from_utf8_lossy(msg));
     let lines = ByteLines { remaining: msg };
     let mut headers = vec![];
     let mut last_header: Option<(Vec<u8>, MessageHeader)> = None;
