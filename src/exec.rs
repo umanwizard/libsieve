@@ -5,6 +5,7 @@ use sema::Ast;
 use sema::{AddressPart, AddressTest, EnvelopeTest, ExistsTest, HeaderTest, SizeTest, TestCommand};
 use std::collections::{hash_map::Entry::Occupied, hash_map::Entry::Vacant, HashMap, HashSet};
 
+#[derive(Debug)]
 pub enum Action<'a> {
     Fileinto(&'a str),
     Redirect(&'a str),
@@ -140,7 +141,7 @@ fn check_test<'a, 'm>(
             }
             Ok(false)
         }
-        TestCommand::Not(inner) => check_test(&**inner, msg, header_idx, ctx, env),
+        TestCommand::Not(inner) => Ok(!check_test(&**inner, msg, header_idx, ctx, env)?),
         TestCommand::Size(SizeTest { over, limit }) => Ok(if *over {
             (msg.size as u64) > *limit
         } else {
@@ -192,9 +193,15 @@ fn execute_command<'a, 'm>(
             return Ok(());
         }
         Fileinto(s) => {
+            if ctx.keep == KeepStyle::Implicit {
+                ctx.keep = KeepStyle::Cancelled;
+            }
             ctx.fileintos.insert(s);
         }
         Redirect(s) => {
+            if ctx.keep == KeepStyle::Implicit {
+                ctx.keep = KeepStyle::Cancelled;
+            }
             ctx.redirects.insert(s);
         }
         Keep => {
@@ -236,7 +243,7 @@ pub fn execute<'a, 'm>(
         match header_idx.entry(name.clone()) {
             Occupied(oe) => oe.into_mut().push(idx),
             Vacant(ve) => {
-                ve.insert(vec![]);
+                ve.insert(vec![idx]);
             }
         }
     }
