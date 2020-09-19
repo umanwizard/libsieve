@@ -1,5 +1,5 @@
 [package]
-name = "libsieve-rs"
+name = "sieve"
 version = "0.1.0"
 authors = ["Brennan Vincent <brennan@umanwizard.com>"]
 edition = "2018"
