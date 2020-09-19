@@ -121,7 +121,9 @@ pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
     let mut last_header: Option<(Vec<u8>, MessageHeader)> = None;
     let mut body = vec![];
     for l in lines {
+        eprintln!("Line: {}", String::from_utf8_lossy(l));
         let is_continuation = l.get(0).map(u8::is_ascii_whitespace).unwrap_or(false);
+        eprintln!("Is continuation? {}", is_continuation);
         if is_continuation {
             let header = &mut last_header
                 .as_mut()
@@ -134,6 +136,7 @@ pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
             }
             if l.len() == 0 {
                 body = lines.remaining.to_vec();
+                eprintln!("Breaking, body is the rest.");
                 break;
             }
             let (name, value) = l
