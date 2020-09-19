@@ -87,7 +87,6 @@ impl MessageHeader {
     pub fn from_lines<'a, I: IntoIterator<Item = &'a [u8]>>(lines: I) -> Self {
         let mut result = None;
         for (idx, l) in lines.into_iter().enumerate() {
-            assert!(!l[0].is_ascii_whitespace());
             if idx == 0 {
                 result = Some(Self {
                     raw: vec![l.to_vec()],
