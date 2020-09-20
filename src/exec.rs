@@ -239,8 +239,11 @@ pub fn execute<'a, 'm>(
 ) -> anyhow::Result<Vec<Action<'a>>> {
     let mut header_idx: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
     for (idx, (name, _)) in msg.headers.iter().enumerate() {
-        // TODO - avoid the clone with the raw entry api.
-        match header_idx.entry(name.clone()) {
+        let mut name = name.clone();
+        for ch in name.iter_mut() {
+            *ch = ch.to_ascii_uppercase();
+        }
+        match header_idx.entry(name) {
             Occupied(oe) => oe.into_mut().push(idx),
             Vacant(ve) => {
                 ve.insert(vec![idx]);
