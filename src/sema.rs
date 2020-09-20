@@ -491,7 +491,11 @@ pub fn header<'doc>(cmd: &'doc Test) -> anyhow::Result<TestCommand> {
                 .map(|s| MatchKey::new(comparator, match_type, s))
                 .collect();
             return Ok(TestCommand::Header(HeaderTest {
-                header_names: hn.iter().map(StringIsh::to_string).collect(),
+                header_names: hn
+                    .iter()
+                    .map(StringIsh::to_string)
+                    .map(|s| s.to_ascii_uppercase())
+                    .collect(),
                 key_list: key_list?,
             }));
         }

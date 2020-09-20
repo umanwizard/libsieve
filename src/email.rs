@@ -1,9 +1,21 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 #[derive(Clone)]
 pub struct ParsedMessage {
     pub headers: Vec<(Vec<u8>, MessageHeader)>,
     pub body: Vec<u8>,
     pub size: usize,
+}
+
+impl Debug for ParsedMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "==HEADER==")?;
+        for (name, val) in self.headers.iter() {
+            write!(f, "{}\n{:?}", String::from_utf8_lossy(name), val)?;
+        }
+        writeln!(f, "==BODY==")?;
+        write!(f, "{}", String::from_utf8_lossy(&self.body))?;
+        Ok(())
+    }
 }
 
 // TODO - 998 line length?
@@ -75,6 +87,17 @@ impl std::error::Error for MsgParseError {}
 pub struct MessageHeader {
     raw: Vec<Vec<u8>>,
     unfolded: Vec<u8>,
+}
+
+impl Debug for MessageHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Raw: ")?;
+        for ln in self.raw.iter() {
+            writeln!(f, "{}", String::from_utf8_lossy(ln))?;
+        }
+        writeln!(f, "Unfolded: {}", String::from_utf8_lossy(&self.unfolded))?;
+        Ok(())
+    }
 }
 
 impl MessageHeader {
