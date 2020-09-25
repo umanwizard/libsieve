@@ -3,12 +3,9 @@ use sieve::sema::analyze;
 use sieve::{email, exec::execute, parse::document};
 fn main() {
     let script = r#"
-    if allof (
-        header :contains ["List-Id"] "freebsd.org",
-        not header :contains ["To", "Cc", "Bcc"] "brennan@umanwizard.com"
-      ) {
-        fileinto "freebsd lists";
-      }"#
+    if header :is ["Subject"] [" asdf"] {
+      redirect "brennan.vincent@gmail.com";
+    }"#
     .replace('\n', "\r\n");
     let mail = r"#X-Fes-Received-For: brennan@umanwizard.com
 X-Fes-Received-From: brennan@umanwizard.com
