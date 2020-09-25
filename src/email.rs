@@ -105,6 +105,7 @@ impl MessageHeader {
         assert!(continuation[0].is_ascii_whitespace());
         let trimmed = trim_bytes(continuation);
         self.raw.push(continuation.to_vec());
+        self.unfolded.push(b' ');
         self.unfolded.extend_from_slice(trimmed);
     }
     pub fn from_lines<'a, I: IntoIterator<Item = &'a [u8]>>(lines: I) -> Self {
@@ -168,11 +169,12 @@ pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
                     .position(|&ch| ch == b':')
                     .map(|pos| (&l[..pos], l[pos + 1..].to_vec()))
                     .ok_or_else(|| MsgParseError::MalformedHeader(l.to_vec()))?;
+                let trimmed = trim_bytes(&value).to_vec();
                 last_header = Some((
                     name.to_vec(),
                     MessageHeader {
-                        raw: vec![value.clone()],
-                        unfolded: value,
+                        raw: vec![value],
+                        unfolded: trimmed,
                     },
                 ));
             }
