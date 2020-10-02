@@ -1,6 +1,6 @@
 use email::SmtpEnvelope;
-use sieve::sema::analyze;
-use sieve::{email, exec::execute, parse::document};
+use libsieve::sema::analyze;
+use libsieve::{email, exec::execute, parse::document};
 fn main() {
     let script = r#"
     if header :is ["Subject"] [" asdf"] {
