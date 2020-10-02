@@ -2,6 +2,9 @@
 name = "sieve"
 version = "0.1.0"
 authors = ["Brennan Vincent <brennan@umanwizard.com>"]
+description = "Experimental interpreter for Sieve scripts (RFC 5228)"
+license-file = "LICENSE"
+repository = "https://github.com/umanwizard/libsieve"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
