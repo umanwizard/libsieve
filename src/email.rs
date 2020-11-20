@@ -160,7 +160,7 @@ pub fn parse<'a>(msg: &'a [u8]) -> Result<ParsedMessage, MsgParseError> {
                 if let Some((name, value)) = last_header.take() {
                     headers.push((name.clone(), value));
                 }
-                if l.len() == 0 {
+                if l.is_empty() {
                     in_body = true;
                     continue;
                 }
@@ -208,5 +208,5 @@ testing! 3
 "#
     .replace('\n', "\r\n");
     let pm = parse(test.as_bytes()).unwrap();
-    assert!(pm.to_vec() == test.to_string().into_bytes());
+    assert!(pm.to_vec() == test.into_bytes());
 }

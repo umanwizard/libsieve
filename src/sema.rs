@@ -249,7 +249,7 @@ pub fn if_control<'doc>(cmds: &'doc [Command]) -> anyhow::Result<IfControl> {
 }
 
 pub fn if_branch<'doc>(cmd: &'doc Command) -> anyhow::Result<(TestCommand, Block)> {
-    if cmd.args.inner.len() > 0 {
+    if !cmd.args.inner.is_empty() {
         bail!("if/elsif cannot have non-test arguments.");
     } else if cmd.args.tests.len() != 1 {
         bail!("if/elsif must have exactly one test.");
@@ -260,7 +260,7 @@ pub fn if_branch<'doc>(cmd: &'doc Command) -> anyhow::Result<(TestCommand, Block
 
 pub fn e_branch<'doc>(cmd: &'doc Command) -> anyhow::Result<Block> {
     assert_eq!("else", cmd.id.to_lowercase().as_str());
-    if cmd.args.inner.len() > 0 || cmd.args.tests.len() > 0 {
+    if !cmd.args.inner.is_empty() || !cmd.args.tests.is_empty() {
         bail!("else cannot have any arguments.");
     } else {
         Ok(block(&cmd.block)?)
@@ -313,7 +313,7 @@ fn analyze_args<'doc>(args: &'doc [Argument]) -> anyhow::Result<Args<'doc>> {
         let arg = match arg {
             None => break,
             Some(Argument::Tag(s)) => {
-                if ret.positional.len() > 0 {
+                if !ret.positional.is_empty() {
                     bail!("Tag {} after positional argument", s);
                 }
                 match s.to_lowercase().as_ref() {

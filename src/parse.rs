@@ -73,7 +73,7 @@ fn multiline_literal(input: &str) -> IResult<&str, &str> {
 fn multiline_dotstart(input: &str) -> IResult<&str, &str> {
     delimited(
         tag("."),
-        verify(not_line_ending, |s: &str| s.len() > 0),
+        verify(not_line_ending, |s: &str| !s.is_empty()),
         crlf,
     )(input)
 }
@@ -195,7 +195,7 @@ fn test_list(input: &str) -> IResult<&str, Vec<Test>> {
                 w(tag(")")),
             ),
         ))),
-        |o| o.unwrap_or(vec![]),
+        |o| o.unwrap_or_default(),
     )(input)
 }
 
@@ -218,15 +218,15 @@ fn string_list(input: &str) -> IResult<&str, Vec<StringIsh>> {
 
 fn stringish(input: &str) -> IResult<&str, StringIsh> {
     alt((
-        map(quoted_string, |s| StringIsh::Quoted(s)),
-        map(multi_line, |v| StringIsh::MultiLine(v)),
+        map(quoted_string, StringIsh::Quoted),
+        map(multi_line, StringIsh::MultiLine),
     ))(input)
 }
 
 fn argument(input: &str) -> IResult<&str, Argument> {
     alt((
-        map(string_list, |sl| Argument::Strings(sl)),
-        map(number, |n| Argument::Number(n)),
+        map(string_list, Argument::Strings),
+        map(number, Argument::Number),
         map(tagged_id, |id| Argument::Tag(id)),
     ))(input)
 }
@@ -293,16 +293,16 @@ fn parse_quoted_string() {
 }
 
 #[cfg(test)]
-const HASHES: &'static [&'static str] = &["# This is a #hash comment\r\n"];
+const HASHES: &[&str] = &["# This is a #hash comment\r\n"];
 #[cfg(test)]
-const NON_HASHES: &'static [&'static str] = &["This is not\r. \r\n", " # Nor this.\r\n"];
+const NON_HASHES: &[&str] = &["This is not\r. \r\n", " # Nor this.\r\n"];
 #[cfg(test)]
-const BRACKETS: &'static [&'static str] = &[
+const BRACKETS: &[&str] = &[
     "/* This is a bracket comment*/",
     "/* And so /* \r\n is this */",
 ];
 #[cfg(test)]
-const NON_BRACKETS: &'static [&'static str] = &["/* But \n this fails */"];
+const NON_BRACKETS: &[&str] = &["/* But \n this fails */"];
 #[test]
 fn parse_id() {
     assert_eq!(identifier("hello_there0"), Ok(("", "hello_there0")));
