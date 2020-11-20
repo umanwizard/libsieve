@@ -5,8 +5,7 @@ fn main() {
     let script = r#"
     if header :is ["Subject"] [" asdf"] {
       redirect "brennan.vincent@gmail.com";
-    }"#
-    .replace('\n', "\r\n");
+    }"#;
     let mail = r"#X-Fes-Received-For: brennan@umanwizard.com
 X-Fes-Received-From: brennan@umanwizard.com
 Received: From: [192.168.1.213] By umanwizard.com ; 19 Sep 2020 16:39:37+0000

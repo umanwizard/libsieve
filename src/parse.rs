@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     bytes::complete::{escaped_transform, tag, take, take_while, take_while1},
-    character::complete::{crlf, digit1, none_of, not_line_ending, one_of, space0, space1},
+    character::complete::{crlf, digit1, multispace1, none_of, not_line_ending, one_of, space0},
     combinator::{all_consuming, map, map_res, opt, recognize, value, verify},
     error::ErrorKind,
     multi::{many0, many_till, separated_nonempty_list},
@@ -149,8 +149,7 @@ fn tagged_id(input: &str) -> IResult<&str, &str> {
 }
 
 fn white_space(input: &str) -> IResult<&str, ()> {
-    alt((value((), comment), value((), crlf), value((), space1)))(input)
-    //    alt((comment, value((), many1(alt((crlf, space1))))))(input)
+    alt((value((), comment), value((), multispace1)))(input)
 }
 
 fn quoted_string(input: &str) -> IResult<&str, String> {
