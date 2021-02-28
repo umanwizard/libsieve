@@ -3,7 +3,7 @@ name = "libsieve"
 version = "0.1.0"
 authors = ["Brennan Vincent <brennan@umanwizard.com>"]
 description = "Experimental interpreter for Sieve scripts (RFC 5228)"
-license-file = "LICENSE"
+license = "Apache-2.0"
 repository = "https://github.com/umanwizard/libsieve"
 edition = "2018"
 
