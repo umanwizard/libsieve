@@ -1,6 +1,6 @@
 [package]
 name = "libsieve"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Brennan Vincent <brennan@umanwizard.com>"]
 description = "Experimental interpreter for Sieve scripts (RFC 5228)"
 license = "Apache-2.0"
