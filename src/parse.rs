@@ -4,14 +4,14 @@ use nom::{
     character::complete::{crlf, digit1, multispace1, none_of, not_line_ending, one_of, space0},
     combinator::{all_consuming, map, map_res, opt, recognize, value, verify},
     error::ErrorKind,
-    multi::{many0, many_till, separated_nonempty_list},
+    multi::{many0, many_till, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
 
-fn w<'a, O, P>(p: P) -> impl Fn(&'a str) -> IResult<&'a str, O>
+fn w<'a, O, P>(p: P) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
-    P: Fn(&'a str) -> IResult<&'a str, O>,
+    P: FnMut(&'a str) -> IResult<&'a str, O>,
 {
     preceded(many0(white_space), p)
 }
@@ -191,7 +191,7 @@ fn test_list(input: &str) -> IResult<&str, Vec<Test>> {
             map(test, |t| vec![t]),
             delimited(
                 w(tag("(")),
-                separated_nonempty_list(w(tag(",")), test),
+                separated_list1(w(tag(",")), test),
                 w(tag(")")),
             ),
         ))),
@@ -210,7 +210,7 @@ fn string_list(input: &str) -> IResult<&str, Vec<StringIsh>> {
         map(stringish, |s| vec![s]),
         delimited(
             w(tag("[")),
-            separated_nonempty_list(w(tag(",")), stringish),
+            separated_list1(w(tag(",")), stringish),
             w(tag("]")),
         ),
     ))(input)
