@@ -1,3 +1,6 @@
+pub mod header_layout;
+mod parse;
+
 use std::fmt::{Debug, Display};
 #[derive(Clone)]
 pub struct ParsedMessage {

@@ -189,11 +189,7 @@ fn test_list(input: &str) -> IResult<&str, Vec<Test>> {
     map(
         opt(alt((
             map(test, |t| vec![t]),
-            delimited(
-                w(tag("(")),
-                separated_list1(w(tag(",")), test),
-                w(tag(")")),
-            ),
+            delimited(w(tag("(")), separated_list1(w(tag(",")), test), w(tag(")"))),
         ))),
         |o| o.unwrap_or_default(),
     )(input)
