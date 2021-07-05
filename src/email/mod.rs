@@ -1,5 +1,5 @@
 pub mod header_layout;
-mod parse;
+pub mod parse;
 
 use std::fmt::{Debug, Display};
 #[derive(Clone)]
