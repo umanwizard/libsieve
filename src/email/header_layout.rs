@@ -21,6 +21,7 @@ pub struct HeaderFieldFormatter {
     breaks: Vec<Break>,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct FormatError;
 
 impl HeaderFieldFormatter {
@@ -53,7 +54,7 @@ impl HeaderFieldFormatter {
         }
     }
     pub fn push(&mut self, token: &[u8], priority: usize, space: bool) -> Result<(), FormatError> {
-        if priority > self.distinct_priorities {
+        if priority >= self.distinct_priorities {
             panic!()
         }
         if token.len() > self.avail(false) {
@@ -65,9 +66,10 @@ impl HeaderFieldFormatter {
             self.buffer.push(b' ');
         }
         if pre_space_len <= self.avail(true) {
-            // we can fit everything on the same line. The score is a slice of all zeroes,
-            // so we don't need to set it.
-            // optim[n] is similarly left at `None`.
+            // We can fit everything on the same line
+            // Make sure there are zeros...
+            self.next_score(self.breaks.len());
+            self.optim.push(None);
         } else {
             // We have to break somewhere.
             // Try all the possible breakpoints starting at the end.
@@ -96,8 +98,9 @@ impl HeaderFieldFormatter {
                 if potential_line_width > self.avail(false) {
                     break;
                 }
-                let score = self.score(try_break_idx);
-                if score < &best_score {
+                let mut score = self.score(try_break_idx).to_vec();
+                score[self.breaks[try_break_idx].priority] += 1;
+                if &score < &best_score {
                     for i in 0..best_score.len() {
                         best_score[i] = score[i];
                     }
@@ -105,12 +108,12 @@ impl HeaderFieldFormatter {
                 }
             }
 
-            let result_score = self.score_mut(self.breaks.len());
+            let result_score = self.next_score(self.breaks.len());
             for i in 0..best_score.len() {
                 result_score[i] = best_score[i];
             }
 
-            self.optim[self.breaks.len()] = Some(best_score_break_idx);
+            self.optim.push(Some(best_score_break_idx));
         }
         self.breaks.push(Break {
             index: self.buffer.len(),
@@ -120,13 +123,53 @@ impl HeaderFieldFormatter {
         Ok(())
     }
 
+    pub fn done(self, ret: &mut Vec<u8>) {
+        let mut cur_break_and_idx = match self.optim.last().unwrap() {
+            Some(break_idx) => Some((self.breaks[*break_idx], *break_idx)),
+            None => {
+                if self.breaks.last().unwrap().space {
+                    ret.extend_from_slice(&self.buffer[0..self.buffer.len() - 1]);
+                    ret.push(b'\r');
+                    ret.push(b'\n');
+                } else {
+                    ret.extend_from_slice(&self.buffer);
+                    ret.push(b'\r');
+                    ret.push(b'\n');
+                };
+                return;
+            }
+        };
+        let mut indices = vec![];
+        let mut to_process_r = self.buffer.len() - self.breaks.last().unwrap().space as usize;
+        while let Some((cur_break, cur_break_idx)) = cur_break_and_idx {
+            let r = to_process_r;
+            let l = cur_break.index;
+            indices.push((l, r));
+            to_process_r = l - cur_break.space as usize;
+            cur_break_and_idx = self.optim[cur_break_idx].map(|idx| (self.breaks[idx], idx));
+        }
+        indices.push((0, to_process_r));
+        let mut first = true;
+        for (l, r) in indices.iter().rev().copied() {
+            if !first {
+                ret.push(b' ');
+            }
+            first = false;
+            ret.extend_from_slice(&self.buffer[l..r]);
+            ret.push(b'\r');
+            ret.push(b'\n');
+        }
+    }
+
     fn score(&self, n: usize) -> &[usize] {
         let l = n * self.distinct_priorities;
         let r = (n + 1) * self.distinct_priorities;
         &self.scores[l..r]
     }
 
-    fn score_mut(&mut self, n: usize) -> &mut [usize] {
+    fn next_score(&mut self, n: usize) -> &mut [usize] {
+        assert!(n * self.distinct_priorities == self.scores.len());
+        self.scores.resize((n + 1) * self.distinct_priorities, 0);
         let l = n * self.distinct_priorities;
         let r = (n + 1) * self.distinct_priorities;
         &mut self.scores[l..r]
@@ -134,11 +177,52 @@ impl HeaderFieldFormatter {
 
     // maximum space available in a line
     fn avail(&self, is_first: bool) -> usize {
-        self.max_width
-            - if is_first {
-                0
-            } else {
-                1 // to accommodate the space for folding
-            }
+        self.max_width - ((!is_first) as usize) // to accommodate the space for folding
     }
+}
+
+// Test script; use as follows:
+// 0!brennan
+// 0!@
+// 0!umanwizard.com
+// 1 ;
+// 0!mary-poppins-supercalifragilisticexpialidocious
+// 0!@
+// 0!mary-poppins-supercalifragilisticexpialidocious.com
+// 1 ;
+// 0!some-normal-address
+// 0!@
+// 0!hotmail.com
+// 1 ;
+// 0!brennan.vincent
+// 0!@
+// 0!gmail.com
+
+fn main() {
+    use std::io::stdin;
+    use std::io::BufRead;
+
+    let mut hff = HeaderFieldFormatter::new(78, 3, b"To:", 2, true);
+    for line in stdin().lock().lines() {
+        let line = line.unwrap();
+        let chs = line.as_bytes();
+        let mut prio = 0;
+        let mut cursor = 0;
+        while chs[cursor].is_ascii_digit() {
+            prio *= 10;
+            prio += (chs[cursor] - b'0') as usize;
+            cursor += 1;
+        }
+
+        let space = match chs[cursor] {
+            b' ' => true,
+            b'!' => false,
+            _ => panic!("{}", line),
+        };
+
+        hff.push(&chs[cursor + 1..], prio, space).unwrap();
+    }
+    let mut result = vec![];
+    hff.done(&mut result);
+    print!("{}", std::str::from_utf8(&result).unwrap());
 }
