@@ -2,6 +2,7 @@ use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_while;
 use nom::bytes::complete::take_while1;
+use nom::combinator::map;
 use nom::combinator::opt;
 use nom::combinator::value;
 use nom::error::Error;
@@ -83,6 +84,22 @@ fn comment(input: &[u8]) -> IResult<&[u8], ()> {
             tag(b")"),
         )),
     )(input)
+}
+
+fn is_atext(ch: u8) -> bool {
+    ch.is_ascii_alphanumeric() || b"!#$%&'*+-/=?^_`{|}~".iter().any(|ch2| *ch2 == ch)
+}
+
+pub fn atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    map(
+        tuple((opt(cfws), take_while1(is_atext), opt(cfws))),
+        |(_, the_atom, _)| the_atom,
+    )(input)
+}
+
+fn dot_atom_text(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    // dot-atom-text   =   1*atext *("." 1*atext)
+    todo!()
 }
 
 pub fn cfws(input: &[u8]) -> IResult<&[u8], ()> {
