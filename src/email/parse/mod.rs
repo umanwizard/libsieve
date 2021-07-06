@@ -4,15 +4,20 @@ use nom::bytes::complete::take_while;
 use nom::bytes::complete::take_while1;
 use nom::combinator::map;
 use nom::combinator::opt;
+use nom::combinator::recognize;
 use nom::combinator::value;
 use nom::error::Error;
 use nom::error::ErrorKind;
 use nom::error::ParseError;
+use nom::multi::many0;
 use nom::multi::many0_count;
+use nom::multi::many1;
 use nom::multi::many1_count;
 use nom::sequence::tuple;
 use nom::Err;
 use nom::IResult;
+
+pub mod date_time;
 
 fn is_wsp(ch: u8) -> bool {
     ch == b' ' || ch == b'\t'
@@ -90,6 +95,10 @@ fn is_atext(ch: u8) -> bool {
     ch.is_ascii_alphanumeric() || b"!#$%&'*+-/=?^_`{|}~".iter().any(|ch2| *ch2 == ch)
 }
 
+pub fn is_special(ch: u8) -> bool {
+    b"()<>[]:;@\\,.\"".iter().any(|ch2| *ch2 == ch)
+}
+
 pub fn atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
     map(
         tuple((opt(cfws), take_while1(is_atext), opt(cfws))),
@@ -99,7 +108,17 @@ pub fn atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 fn dot_atom_text(input: &[u8]) -> IResult<&[u8], &[u8]> {
     // dot-atom-text   =   1*atext *("." 1*atext)
-    todo!()
+    recognize(tuple((
+        take_while1(is_atext),
+        many0_count(tuple((tag(b"."), take_while1(is_atext)))),
+    )))(input)
+}
+
+pub fn dot_atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    map(
+        tuple((opt(cfws), dot_atom_text, opt(cfws))),
+        |(_, the_atom, _)| the_atom,
+    )(input)
 }
 
 pub fn cfws(input: &[u8]) -> IResult<&[u8], ()> {
@@ -110,6 +129,44 @@ pub fn cfws(input: &[u8]) -> IResult<&[u8], ()> {
         ),
         fws,
     ))(input)
+}
+
+fn is_qtext(ch: u8) -> bool {
+    ch == 33 || (35 <= ch && ch <= 91) || (93 <= ch && ch <= 126)
+}
+
+fn qcontent(input: &[u8]) -> IResult<&[u8], u8> {
+    alt((satisfy_byte(is_qtext), quoted_pair))(input)
+}
+
+// TODO - Cow here when possible, rather than always allocating?
+pub fn quoted_string(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    map(
+        tuple((
+            opt(cfws),
+            tag(b"\""),
+            many0(map(tuple((opt(fws), qcontent)), |(_, ch)| ch)),
+            opt(fws),
+            tag(b"\""),
+            opt(cfws),
+        )),
+        |(_, _, s, _, _, _)| s,
+    )(input)
+}
+
+// TODO - Cow when possible?
+fn word(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    alt((map(atom, <[u8]>::to_vec), quoted_string))(input)
+}
+
+// TODO - Cow when possible?
+pub fn phrase(input: &[u8]) -> IResult<&[u8], Vec<Vec<u8>>> {
+    many1(word)(input)
+}
+
+pub fn unstructured(input: &[u8]) {
+    //unstructured    =   (*([FWS] VCHAR) *WSP) / obs-unstruct
+    todo!()
 }
 
 #[cfg(test)]

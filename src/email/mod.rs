@@ -1,4 +1,5 @@
-pub mod header_layout;
+pub mod error;
+pub mod headers;
 pub mod parse;
 
 use std::fmt::{Debug, Display};
