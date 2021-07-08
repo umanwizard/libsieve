@@ -2,6 +2,7 @@ use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_while;
 use nom::bytes::complete::take_while1;
+use nom::combinator::complete;
 use nom::combinator::map;
 use nom::combinator::opt;
 use nom::combinator::recognize;
@@ -19,6 +20,9 @@ use nom::sequence::tuple;
 use nom::Err;
 use nom::IResult;
 
+use crate::email::btv_new::{ByteStr, ByteString};
+
+pub mod address;
 pub mod date_time;
 pub mod email;
 pub mod header;
@@ -103,22 +107,25 @@ pub fn is_special(ch: u8) -> bool {
     b"()<>[]:;@\\,.\"".iter().any(|ch2| *ch2 == ch)
 }
 
-pub fn atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn atom(input: &[u8]) -> IResult<&[u8], &ByteStr> {
     map(
         tuple((opt(cfws), take_while1(is_atext), opt(cfws))),
-        |(_, the_atom, _)| the_atom,
+        |(_, the_atom, _)| ByteStr::from_slice(the_atom),
     )(input)
 }
 
-fn dot_atom_text(input: &[u8]) -> IResult<&[u8], &[u8]> {
+fn dot_atom_text(input: &[u8]) -> IResult<&[u8], &ByteStr> {
     // dot-atom-text   =   1*atext *("." 1*atext)
-    recognize(tuple((
-        take_while1(is_atext),
-        many0_count(tuple((tag(b"."), take_while1(is_atext)))),
-    )))(input)
+    map(
+        recognize(tuple((
+            take_while1(is_atext),
+            many0_count(tuple((tag(b"."), take_while1(is_atext)))),
+        ))),
+        ByteStr::from_slice,
+    )(input)
 }
 
-pub fn dot_atom(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn dot_atom(input: &[u8]) -> IResult<&[u8], &ByteStr> {
     map(
         tuple((opt(cfws), dot_atom_text, opt(cfws))),
         |(_, the_atom, _)| the_atom,
@@ -144,7 +151,7 @@ fn qcontent(input: &[u8]) -> IResult<&[u8], u8> {
 }
 
 // TODO - Cow here when possible, rather than always allocating?
-pub fn quoted_string(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
+pub fn quoted_string(input: &[u8]) -> IResult<&[u8], ByteString> {
     map(
         tuple((
             opt(cfws),
@@ -154,22 +161,30 @@ pub fn quoted_string(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
             tag(b"\""),
             opt(cfws),
         )),
-        |(_, _, s, _, _, _)| s,
+        |(_, _, s, _, _, _)| ByteString(s),
     )(input)
 }
 
 // TODO - Cow when possible?
-fn word(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
-    alt((map(atom, <[u8]>::to_vec), quoted_string))(input)
+fn word(input: &[u8]) -> IResult<&[u8], ByteString> {
+    alt((map(atom, ToOwned::to_owned), quoted_string))(input)
 }
 
 // TODO - Cow when possible?
-pub fn phrase(input: &[u8]) -> IResult<&[u8], Vec<Vec<u8>>> {
+pub fn phrase(input: &[u8]) -> IResult<&[u8], Vec<ByteString>> {
     many1(word)(input)
 }
 
+#[test]
+pub fn test_multiword_phrase() {
+    let test = b"Brennan Vincent";
+
+    let x = complete(phrase)(test).unwrap();
+    eprintln!("{:?}", x);
+}
+
 // TODO - Cow when possible?
-pub fn unstructured(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
+pub fn unstructured(input: &[u8]) -> IResult<&[u8], ByteString> {
     let (i, mut o) = fold_many0(
         tuple((opt(fws), satisfy_byte(is_vchar))),
         vec![],
@@ -181,10 +196,13 @@ pub fn unstructured(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
             s
         },
     )(input)?;
-    fold_many0(satisfy_byte(is_wsp), o, |mut s, ch| {
-        s.push(ch);
-        s
-    })(i)
+    map(
+        fold_many0(satisfy_byte(is_wsp), o, |mut s, ch| {
+            s.push(ch);
+            s
+        }),
+        ByteString,
+    )(i)
 }
 
 #[cfg(test)]

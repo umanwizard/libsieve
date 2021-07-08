@@ -12,6 +12,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 chrono = "0.4"
+enum-kinds = "0.5"
 itertools = "0.8"
 memmem = "0.1.1"
 nom = "6.2"

@@ -1,27 +1,25 @@
 use enum_kinds::EnumKind;
 
+pub mod address;
 pub mod layout;
 
-#[derive(Clone, EnumKind)]
+use crate::email::btv_new::{ByteStr, ByteString};
+use address::{Address, Mailbox};
+
+#[derive(Debug, Clone, EnumKind)]
 #[enum_kind(HeaderFieldKind)]
-pub enum HeaderFieldInner {
-    Unstructured(Vec<u8>),
+pub enum HeaderFieldInner<'a> {
+    Unstructured(ByteString),
     // "Date:"
     OrigDate(chrono::DateTime<chrono::offset::FixedOffset>),
-}
-
-impl std::fmt::Debug for HeaderFieldInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match &self {
-            Self::Unstructured(cooked) => write!(f, "{}", String::from_utf8_lossy(cooked)),
-            Self::OrigDate(date) => write!(f, "{:?}", date),
-        }
-    }
+    From(Vec<Mailbox<'a>>),
+    Sender(Mailbox<'a>),
+    ReplyTo(Vec<Address<'a>>),
 }
 
 #[derive(Clone, Debug)]
 pub struct HeaderField<'a> {
-    pub name: &'a [u8],
+    pub name: &'a ByteStr,
     pub raw_value: &'a [u8],
-    pub inner: HeaderFieldInner,
+    pub inner: HeaderFieldInner<'a>,
 }
