@@ -2,6 +2,8 @@ pub mod error;
 pub mod headers;
 pub mod parse;
 
+pub mod btv_new;
+
 use std::fmt::{Debug, Display};
 #[derive(Clone)]
 pub struct ParsedMessage {
@@ -209,8 +211,11 @@ Bonjour:Tout
  monde!
 
 testing! 3
-"#
-    .replace('\n', "\r\n");
-    let pm = parse(test.as_bytes()).unwrap();
-    assert!(pm.to_vec() == test.into_bytes());
+hello, world!
+
+
+blahblahblah"#
+        .replace('\n', "\r\n");
+    let (_i, pm) = parse::email::message(test.as_bytes()).unwrap();
+    eprintln!("{:?}", pm)
 }

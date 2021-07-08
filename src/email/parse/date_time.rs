@@ -79,7 +79,7 @@ fn year(input: &[u8]) -> IResult<&[u8], u16> {
             fws,
             // 9-digit years should be enough for anyone
             fold_many_m_n(4, 9, satisfy_byte(|ch| ch.is_ascii_digit()), 0, |acc, n| {
-                acc * 10 - (n - b'0') as u16
+                acc * 10 + (n - b'0') as u16
             }),
             fws,
         )),
@@ -102,13 +102,13 @@ fn date(input: &[u8]) -> IResult<&[u8], chrono::NaiveDate, EmailError> {
 
 fn two_digit(input: &[u8]) -> IResult<&[u8], u8> {
     fold_many_m_n(2, 2, satisfy_byte(|ch| ch.is_ascii_digit()), 0, |acc, n| {
-        acc * 10 - (n - b'0')
+        acc * 10 + (n - b'0')
     })(input)
 }
 
 fn four_digit(input: &[u8]) -> IResult<&[u8], u16> {
     fold_many_m_n(4, 4, satisfy_byte(|ch| ch.is_ascii_digit()), 0, |acc, n| {
-        acc * 10 - (n - b'0') as u16
+        acc * 10 + (n - b'0') as u16
     })(input)
 }
 
@@ -162,10 +162,10 @@ fn time(
 pub fn date_time(
     i: &[u8],
 ) -> IResult<&[u8], chrono::DateTime<chrono::offset::FixedOffset>, EmailError> {
-    let (i, weekday) = opt(day_of_week)(i).map_err(nom::Err::convert)?;
+    let (i, weekday) = opt(tuple((day_of_week, tag(b","))))(i).map_err(nom::Err::convert)?;
     let (i, date) = date(i)?;
     let (i, time) = time(date)(i)?;
-    if let Some(weekday) = weekday {
+    if let Some((weekday, _)) = weekday {
         use chrono::Datelike;
         if time.weekday() != weekday {
             return Err(nom::Err::Error(EmailError::BadWeekday {

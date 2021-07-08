@@ -2,7 +2,7 @@ type NomErr<'a> = nom::error::Error<&'a [u8]>;
 
 #[derive(Debug)]
 pub enum EmailError<'a> {
-    Parse(NomErr<'a>),
+    Parse(NomErr<'a>, Option<Box<EmailError<'a>>>),
     BadDate {
         y: u16,
         m: chrono::Month,
@@ -28,6 +28,15 @@ pub enum EmailError<'a> {
 
 impl<'a> From<NomErr<'a>> for EmailError<'a> {
     fn from(e: NomErr<'a>) -> Self {
-        Self::Parse(e)
+        Self::Parse(e, None)
+    }
+}
+
+impl<'a> nom::error::ParseError<&'a [u8]> for EmailError<'a> {
+    fn from_error_kind(input: &'a [u8], code: nom::error::ErrorKind) -> Self {
+        Self::Parse(NomErr { input, code }, None)
+    }
+    fn append(input: &'a [u8], code: nom::error::ErrorKind, other: Self) -> Self {
+        Self::Parse(NomErr { input, code }, Some(Box::new(other)))
     }
 }

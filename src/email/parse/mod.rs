@@ -9,6 +9,8 @@ use nom::combinator::value;
 use nom::error::Error;
 use nom::error::ErrorKind;
 use nom::error::ParseError;
+use nom::multi::fold_many0;
+use nom::multi::fold_many1;
 use nom::multi::many0;
 use nom::multi::many0_count;
 use nom::multi::many1;
@@ -18,6 +20,8 @@ use nom::Err;
 use nom::IResult;
 
 pub mod date_time;
+pub mod email;
+pub mod header;
 
 fn is_wsp(ch: u8) -> bool {
     ch == b' ' || ch == b'\t'
@@ -164,9 +168,23 @@ pub fn phrase(input: &[u8]) -> IResult<&[u8], Vec<Vec<u8>>> {
     many1(word)(input)
 }
 
-pub fn unstructured(input: &[u8]) {
-    //unstructured    =   (*([FWS] VCHAR) *WSP) / obs-unstruct
-    todo!()
+// TODO - Cow when possible?
+pub fn unstructured(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    let (i, mut o) = fold_many0(
+        tuple((opt(fws), satisfy_byte(is_vchar))),
+        vec![],
+        |mut s, (maybe_fws, ch)| {
+            if let Some(()) = maybe_fws {
+                s.push(b' ');
+            }
+            s.push(ch);
+            s
+        },
+    )(input)?;
+    fold_many0(satisfy_byte(is_wsp), o, |mut s, ch| {
+        s.push(ch);
+        s
+    })(i)
 }
 
 #[cfg(test)]
