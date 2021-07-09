@@ -15,6 +15,9 @@ pub enum HeaderFieldInner<'a> {
     From(Vec<Mailbox<'a>>),
     Sender(Mailbox<'a>),
     ReplyTo(Vec<Address<'a>>),
+    To(Vec<Address<'a>>),
+    Cc(Vec<Address<'a>>),
+    Bcc(Vec<Address<'a>>),
 }
 
 #[derive(Clone, Debug)]

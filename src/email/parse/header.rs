@@ -31,6 +31,7 @@ use email::error::EmailError;
 use email::headers::{HeaderField, HeaderFieldInner, HeaderFieldKind};
 
 use super::address::{address, mailbox};
+use super::cfws;
 use super::date_time::date_time;
 use super::unstructured;
 
@@ -44,6 +45,9 @@ fn header_name(input: &[u8]) -> IResult<&[u8], HeaderFieldKind> {
         value(From, tag_no_case("from")),
         value(Sender, tag_no_case("sender")),
         value(ReplyTo, tag_no_case("reply-to")),
+        value(To, tag_no_case("to")),
+        value(Cc, tag_no_case("cc")),
+        value(Bcc, tag_no_case("bcc")),
         value(Unstructured, take_while1(is_ftext)),
     ))(input)
 }
@@ -65,6 +69,18 @@ fn header_inner(
         ReplyTo => map(
             separated_list1(tag(b","), address),
             HeaderFieldInner::ReplyTo,
+        )(i)
+        .map_err(nom::Err::convert),
+        To => map(separated_list1(tag(b","), address), HeaderFieldInner::To)(i)
+            .map_err(nom::Err::convert),
+        Cc => map(separated_list1(tag(b","), address), HeaderFieldInner::Cc)(i)
+            .map_err(nom::Err::convert),
+        Bcc => map(
+            opt(alt((
+                separated_list1(tag(b","), address),
+                value(vec![], cfws),
+            ))),
+            |maybe_list| HeaderFieldInner::Bcc(maybe_list.unwrap_or(vec![])),
         )(i)
         .map_err(nom::Err::convert),
     }
