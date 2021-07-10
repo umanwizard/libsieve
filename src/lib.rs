@@ -6,7 +6,6 @@ mod tests {
     }
 }
 
-pub mod email;
 pub mod exec;
 pub mod parse;
 pub mod sema;

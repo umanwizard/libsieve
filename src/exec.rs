@@ -1,6 +1,6 @@
-use crate::{email, sema};
+use crate::sema;
 use anyhow::bail;
-use email::{ParsedMessage, SmtpEnvelope};
+use bmail::{HeaderField, Message, SmtpEnvelope};
 use sema::Ast;
 use sema::{AddressPart, AddressTest, EnvelopeTest, ExistsTest, HeaderTest, SizeTest, TestCommand};
 use std::collections::{hash_map::Entry::Occupied, hash_map::Entry::Vacant, HashMap, HashSet};
@@ -52,7 +52,7 @@ fn extract_ap(part: AddressPart, address: &str) -> anyhow::Result<&str> {
 
 fn check_test<'a, 'm>(
     test: &'a sema::TestCommand,
-    msg: &'m ParsedMessage,
+    msg: &'m Message<'m>,
     header_idx: &'m HashMap<Vec<u8>, Vec<usize>>,
     ctx: &mut Context<'a>,
     env: &'m SmtpEnvelope,
@@ -67,7 +67,7 @@ fn check_test<'a, 'm>(
                 for &idx in header_idx.get(h.as_bytes()).unwrap_or(&vec![]) {
                     let txt = extract_ap(
                         *address_part,
-                        std::str::from_utf8(msg.headers[idx].1.unfolded())?,
+                        std::str::from_utf8(&msg.header()[idx].unfolded_value().0)?,
                     )?;
                     for k in key_list {
                         if k.is_match(txt) {
@@ -126,14 +126,14 @@ fn check_test<'a, 'm>(
             key_list,
         }) => {
             for h in header_names {
-                for (_, value) in header_idx
+                for field in header_idx
                     .get(h.as_bytes())
                     .unwrap_or(&vec![])
                     .iter()
-                    .map(|&idx| &msg.headers[idx])
+                    .map(|&idx| &msg.header()[idx])
                 {
                     for k in key_list {
-                        if k.is_match(std::str::from_utf8(value.unfolded())?) {
+                        if k.is_match(std::str::from_utf8(&field.unfolded_value().0)?) {
                             return Ok(true);
                         }
                     }
@@ -143,9 +143,9 @@ fn check_test<'a, 'm>(
         }
         TestCommand::Not(inner) => Ok(!check_test(&**inner, msg, header_idx, ctx, env)?),
         TestCommand::Size(SizeTest { over, limit }) => Ok(if *over {
-            (msg.size as u64) > *limit
+            (msg.size() as u64) > *limit
         } else {
-            (msg.size as u64) < *limit
+            (msg.size() as u64) < *limit
         }),
         TestCommand::True => Ok(true),
     }
@@ -153,7 +153,7 @@ fn check_test<'a, 'm>(
 
 fn execute_command<'a, 'm>(
     cmd: &'a sema::TopLevelCommand,
-    msg: &'m ParsedMessage,
+    msg: &'m Message<'m>,
     header_idx: &'m HashMap<Vec<u8>, Vec<usize>>,
     ctx: &mut Context<'a>,
     env: &'m SmtpEnvelope,
@@ -218,7 +218,7 @@ fn execute_command<'a, 'm>(
 
 fn execute_block<'a, 'm>(
     cmds: &'a [sema::TopLevelCommand],
-    msg: &'m ParsedMessage,
+    msg: &'m Message<'m>,
     header_idx: &'m HashMap<Vec<u8>, Vec<usize>>,
     ctx: &mut Context<'a>,
     env: &'m SmtpEnvelope,
@@ -234,12 +234,12 @@ fn execute_block<'a, 'm>(
 
 pub fn execute<'a, 'm>(
     ast: &'a Ast,
-    msg: &'m ParsedMessage,
+    msg: &'m Message<'m>,
     env: &'m SmtpEnvelope,
 ) -> anyhow::Result<Vec<Action<'a>>> {
     let mut header_idx: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
-    for (idx, (name, _)) in msg.headers.iter().enumerate() {
-        let mut name = name.clone();
+    for (idx, h) in msg.header().iter().enumerate() {
+        let mut name = h.name().0.to_vec();
         for ch in name.iter_mut() {
             *ch = ch.to_ascii_uppercase();
         }

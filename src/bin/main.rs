@@ -1,6 +1,7 @@
-use email::SmtpEnvelope;
+use bmail::parse::email::message;
+use bmail::SmtpEnvelope;
 use libsieve::sema::analyze;
-use libsieve::{email, exec::execute, parse::document};
+use libsieve::{exec::execute, parse::document};
 fn main() {
     let script = r#"
     if header :is ["Subject"] [" asdf"] {
@@ -29,7 +30,8 @@ asdf#"
     let doc = document(&script);
     let ast = analyze(doc.unwrap().1).unwrap();
     println!("{:#?}", ast);
-    let mail = email::parse(mail.as_bytes()).unwrap();
+    let (_, mail) = nom::combinator::complete(message)(mail.as_bytes()).unwrap();
+    println!("{:?}", mail);
     let env = SmtpEnvelope {
         from: None,
         to: None,
