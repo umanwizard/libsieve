@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-bmail = { path = "../bmail" }
+bmail = "0.1.0"
 chrono = "0.4"
 enum-kinds = "0.5"
 itertools = "0.8"

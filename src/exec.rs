@@ -1,6 +1,6 @@
 use crate::sema;
 use anyhow::bail;
-use bmail::{HeaderField, Message, SmtpEnvelope};
+use bmail::{Message, SmtpEnvelope};
 use sema::Ast;
 use sema::{AddressPart, AddressTest, EnvelopeTest, ExistsTest, HeaderTest, SizeTest, TestCommand};
 use std::collections::{hash_map::Entry::Occupied, hash_map::Entry::Vacant, HashMap, HashSet};
