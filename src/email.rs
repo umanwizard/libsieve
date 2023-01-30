@@ -50,13 +50,19 @@ impl<'a> Iterator for ByteLines<'a> {
     type Item = &'a [u8];
     fn next(&mut self) -> Option<Self::Item> {
         for i in 0..self.remaining.len() {
-            if self.remaining[i] == b'\r' && self.remaining[i + 1] == b'\n' {
+            if self.remaining[i] == b'\r' && self.remaining.get(i + 1) == Some(&b'\n') {
                 let ret = &self.remaining[0..i];
                 self.remaining = &self.remaining[i + 2..];
                 return Some(ret);
             }
         }
-        None
+        if self.remaining.is_empty() {
+            None
+        } else {
+            let ret = self.remaining;
+            self.remaining=&[];
+            Some(ret)
+        }
     }
 }
 
